@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { AnalysisPanel } from '@/components/analysis/analysis-panel';
 import {
   ChartContainer,
   ChartTooltip,
@@ -219,21 +220,29 @@ export default function Home() {
             {status.label}
             {mode !== 'connecting' && <> · {formatObservedAt()}</>}
           </div>
-          <Button
-            variant="outline"
-            className="rounded-full px-3 sm:px-4"
-            onClick={() => void refreshPrices(productId, true)}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            <span className="hidden sm:inline">
-              {isRefreshing ? 'Đang cập nhật' : 'Làm mới'}
-            </span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <AnalysisPanel
+              product={product}
+              productId={productId}
+              range={range}
+              observedAt={observedAt}
+            />
+            <Button
+              variant="outline"
+              className="rounded-full px-3 sm:px-4"
+              onClick={() => void refreshPrices(productId, true)}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              <span className="hidden sm:inline">
+                {isRefreshing ? 'Đang cập nhật' : 'Làm mới'}
+              </span>
+            </Button>
+          </div>
         </div>
       </header>
 
