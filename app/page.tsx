@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Area,
   AreaChart,
@@ -565,16 +566,30 @@ export default function Home() {
             {product.label} · Giá hiện tại: {source.provider}. Lịch sử:{' '}
             {historySource.provider}. Tự động làm mới mỗi 4 phút.
           </p>
-          {source.url ? (
-            <a
-              href={source.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-foreground underline-offset-4 hover:underline"
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {source.url ? (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-foreground underline-offset-4 hover:underline"
+              >
+                Xem nguồn dữ liệu <ExternalLink className="size-3" />
+              </a>
+            ) : null}
+            <Link
+              href="/privacy"
+              className="font-semibold underline-offset-4 hover:text-foreground hover:underline"
             >
-              Xem nguồn dữ liệu <ExternalLink className="size-3" />
-            </a>
-          ) : null}
+              Chính sách bảo mật
+            </Link>
+            <Link
+              href="/terms"
+              className="font-semibold underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Điều khoản sử dụng
+            </Link>
+          </div>
         </footer>
       </div>
     </main>
