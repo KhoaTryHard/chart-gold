@@ -1,2674 +1,2498 @@
 {
   "metadata": {
-    "name": "SJC Gold Price Demo Series",
-    "description": "Dữ liệu mô phỏng phục vụ demo biểu đồ giá vàng SJC, không phải giá giao dịch thực tế và không dùng cho quyết định đầu tư.",
-    "isSimulated": true,
-    "source": "synthetic-deterministic",
-    "generatedFor": "Investor visibility dashboard",
-    "currency": "VND",
-    "unit": "triệu đồng/lượng",
-    "frequency": "daily",
-    "timezone": "Asia/Ho_Chi_Minh",
-    "asOf": "2026-09-03",
-    "period": {
-      "start": "2025-09-04",
-      "end": "2026-09-03",
-      "days": 365
+    "sourceUrl": "https://raw.githubusercontent.com/vkhuy/SJC-price/main/docs/data/sjc_final.csv",
+    "sourceRepository": "vkhuy/SJC-price",
+    "sourceFile": "docs/data/sjc_final.csv",
+    "sourceSchema": "timestamp,buy_1l,sell_1l",
+    "snapshotTakenAt": "2026-09-03T09:36:43.265Z",
+    "dataDescription": "Dữ liệu lịch sử giá SJC theo ngày thực tế từ nguồn public, không phải dữ liệu mô phỏng.",
+    "usage": "Chỉ dùng dự phòng khẩn cấp khi live API lỗi; không đại diện cho giá live hiện tại.",
+    "unit": "triệu VND/lượng",
+    "window": {
+      "start": "2025-09-03",
+      "end": "2026-09-02",
+      "calendarDays": 365,
+      "recordCount": 353
     },
-    "filters": {
-      "supported": [
-        "7d",
-        "30d",
-        "1y"
-      ],
-      "dateField": "date",
-      "inclusive": true,
-      "note": "Lọc theo ngày kết thúc asOf; 7d và 30d tính cả ngày hiện tại."
+    "normalization": {
+      "date": "YYYY-MM-DD",
+      "buy": "buy_1l (triệu VND/lượng)",
+      "sell": "sell_1l (triệu VND/lượng)",
+      "spread": "sell - buy (triệu VND/lượng)",
+      "eventId": "null"
     },
-    "schema": {
-      "records": {
-        "date": "ISO 8601 date (YYYY-MM-DD)",
-        "buy": "Giá mua vào, triệu đồng/lượng",
-        "sell": "Giá bán ra, triệu đồng/lượng",
-        "spread": "Chênh lệch sell - buy, triệu đồng/lượng",
-        "eventId": "Mã event hoặc null"
-      },
-      "events": {
-        "date": "ISO 8601 date",
-        "id": "Mã mốc sự kiện",
-        "title": "Nhãn hiển thị tiếng Việt",
-        "note": "Mô tả ngắn tiếng Việt"
-      }
-    }
+    "deterministic": "Records sorted ascending by date; values copied and spread calculated deterministically from source CSV."
   },
-  "events": [
-    {
-      "date": "2025-09-04",
-      "id": "start",
-      "title": "Bắt đầu chuỗi theo dõi",
-      "note": "Mốc khởi tạo dữ liệu mô phỏng."
-    },
-    {
-      "date": "2025-09-18",
-      "id": "safe-haven",
-      "title": "Cầu trú ẩn tăng",
-      "note": "Giá nhích lên trong bối cảnh nhu cầu phòng thủ."
-    },
-    {
-      "date": "2025-10-06",
-      "id": "usd-cools",
-      "title": "USD hạ nhiệt",
-      "note": "Áp lực tỷ giá giảm, biên độ dao động thu hẹp."
-    },
-    {
-      "date": "2025-10-22",
-      "id": "year-end-demand",
-      "title": "Nhu cầu cuối năm",
-      "note": "Sức mua trang sức và tích lũy cải thiện."
-    },
-    {
-      "date": "2025-11-14",
-      "id": "short-pullback",
-      "title": "Điều chỉnh ngắn hạn",
-      "note": "Một nhịp chốt lời nhẹ sau vùng tăng."
-    },
-    {
-      "date": "2025-12-15",
-      "id": "wedding-season",
-      "title": "Mùa cưới hỗ trợ cầu",
-      "note": "Thanh khoản bán lẻ duy trì tích cực."
-    },
-    {
-      "date": "2026-01-05",
-      "id": "new-year",
-      "title": "Khởi đầu năm mới",
-      "note": "Giá mở năm ổn định, xu hướng đi ngang."
-    },
-    {
-      "date": "2026-02-17",
-      "id": "after-tet",
-      "title": "Thanh khoản sau Tết",
-      "note": "Thị trường giao dịch sôi động trở lại."
-    },
-    {
-      "date": "2026-03-21",
-      "id": "global-volatility",
-      "title": "Biến động quốc tế",
-      "note": "Biên độ trong ngày mở rộng, cần quan sát thêm."
-    },
-    {
-      "date": "2026-05-10",
-      "id": "investment-demand",
-      "title": "Cầu đầu tư tăng",
-      "note": "Dòng tiền tích lũy đẩy giá lên vùng mới."
-    },
-    {
-      "date": "2026-07-01",
-      "id": "psychological-level",
-      "title": "Cán mốc tâm lý",
-      "note": "Giá bán vượt vùng 100 triệu đồng/lượng trong mô phỏng."
-    },
-    {
-      "date": "2026-08-20",
-      "id": "profit-taking",
-      "title": "Chốt lời nhẹ",
-      "note": "Giá hạ nhiệt nhưng vẫn giữ nền cao."
-    }
-  ],
   "records": [
     {
+      "date": "2025-09-03",
+      "buy": 131.9,
+      "sell": 133.4,
+      "spread": 1.5,
+      "eventId": null
+    },
+    {
       "date": "2025-09-04",
-      "buy": 85.18,
-      "sell": 86.3,
-      "spread": 1.12,
-      "eventId": "start"
+      "buy": 132.4,
+      "sell": 133.9,
+      "spread": 1.5,
+      "eventId": null
     },
     {
       "date": "2025-09-05",
-      "buy": 85.64,
-      "sell": 86.77,
-      "spread": 1.13,
+      "buy": 132.9,
+      "sell": 134.4,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-09-06",
-      "buy": 85.88,
-      "sell": 87.01,
-      "spread": 1.13,
+      "buy": 133.9,
+      "sell": 135.4,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-09-07",
-      "buy": 86.09,
-      "sell": 87.22,
-      "spread": 1.13,
+      "buy": 133.9,
+      "sell": 135.4,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-09-08",
-      "buy": 86.35,
-      "sell": 87.48,
-      "spread": 1.13,
+      "buy": 133.1,
+      "sell": 135.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-09",
-      "buy": 86.55,
-      "sell": 87.67,
-      "spread": 1.12,
+      "buy": 133.8,
+      "sell": 135.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-10",
-      "buy": 86.61,
-      "sell": 87.73,
-      "spread": 1.12,
+      "buy": 133.3,
+      "sell": 135.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-11",
-      "buy": 86.65,
-      "sell": 87.76,
-      "spread": 1.11,
+      "buy": 130.3,
+      "sell": 133.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2025-09-12",
-      "buy": 86.9,
-      "sell": 88.01,
-      "spread": 1.11,
+      "buy": 128.4,
+      "sell": 131.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2025-09-13",
-      "buy": 87.41,
-      "sell": 88.52,
-      "spread": 1.11,
+      "buy": 128.1,
+      "sell": 131.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2025-09-14",
-      "buy": 87.93,
-      "sell": 89.04,
-      "spread": 1.11,
+      "buy": 128.1,
+      "sell": 131.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2025-09-15",
-      "buy": 88.13,
-      "sell": 89.24,
-      "spread": 1.11,
+      "buy": 128.6,
+      "sell": 131.1,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2025-09-16",
-      "buy": 87.92,
-      "sell": 89.03,
-      "spread": 1.11,
+      "buy": 130.3,
+      "sell": 132.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-17",
-      "buy": 87.54,
-      "sell": 88.66,
-      "spread": 1.12,
+      "buy": 130.3,
+      "sell": 132.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-18",
-      "buy": 87.99,
-      "sell": 89.11,
-      "spread": 1.12,
-      "eventId": "safe-haven"
+      "buy": 130,
+      "sell": 132,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2025-09-19",
-      "buy": 87.43,
-      "sell": 88.56,
-      "spread": 1.13,
+      "buy": 130,
+      "sell": 132,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-20",
-      "buy": 87.61,
-      "sell": 88.75,
-      "spread": 1.14,
+      "buy": 131,
+      "sell": 133,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-21",
-      "buy": 87.7,
-      "sell": 88.86,
-      "spread": 1.16,
+      "buy": 131,
+      "sell": 133,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-22",
-      "buy": 87.7,
-      "sell": 88.87,
-      "spread": 1.17,
+      "buy": 131.6,
+      "sell": 133.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-23",
-      "buy": 87.74,
-      "sell": 88.92,
-      "spread": 1.18,
+      "buy": 133,
+      "sell": 135,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-24",
-      "buy": 87.82,
-      "sell": 89,
-      "spread": 1.18,
+      "buy": 133.1,
+      "sell": 135.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-25",
-      "buy": 87.78,
-      "sell": 88.97,
-      "spread": 1.19,
+      "buy": 132.5,
+      "sell": 134.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-26",
-      "buy": 87.51,
-      "sell": 88.7,
-      "spread": 1.19,
+      "buy": 132.5,
+      "sell": 134.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-27",
-      "buy": 87.13,
-      "sell": 88.32,
-      "spread": 1.19,
+      "buy": 133,
+      "sell": 135,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-28",
-      "buy": 86.97,
-      "sell": 88.15,
-      "spread": 1.18,
+      "buy": 133,
+      "sell": 135,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-29",
-      "buy": 87.23,
-      "sell": 88.41,
-      "spread": 1.18,
+      "buy": 134.5,
+      "sell": 136.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-09-30",
-      "buy": 87.73,
-      "sell": 88.9,
-      "spread": 1.17,
+      "buy": 134.8,
+      "sell": 136.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-01",
-      "buy": 88.11,
-      "sell": 89.26,
-      "spread": 1.15,
+      "buy": 136.4,
+      "sell": 138.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-02",
-      "buy": 88.17,
-      "sell": 89.31,
-      "spread": 1.14,
+      "buy": 136,
+      "sell": 138,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-03",
-      "buy": 88.01,
-      "sell": 89.13,
-      "spread": 1.12,
+      "buy": 135.8,
+      "sell": 137.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-04",
-      "buy": 87.92,
-      "sell": 89.02,
-      "spread": 1.1,
+      "buy": 136.6,
+      "sell": 138.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-05",
-      "buy": 88.02,
-      "sell": 89.11,
-      "spread": 1.09,
+      "buy": 136.6,
+      "sell": 138.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-06",
-      "buy": 88.21,
-      "sell": 89.28,
-      "spread": 1.07,
-      "eventId": "usd-cools"
+      "buy": 138.1,
+      "sell": 140.1,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2025-10-07",
-      "buy": 88.37,
-      "sell": 89.43,
-      "spread": 1.06,
+      "buy": 138.6,
+      "sell": 140.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-08",
-      "buy": 88.54,
-      "sell": 89.59,
-      "spread": 1.05,
+      "buy": 140.5,
+      "sell": 142.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-09",
-      "buy": 88.88,
-      "sell": 89.92,
-      "spread": 1.04,
+      "buy": 140.5,
+      "sell": 142.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-10",
-      "buy": 89.35,
-      "sell": 90.38,
-      "spread": 1.03,
+      "buy": 140.2,
+      "sell": 142.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-11",
-      "buy": 89.71,
-      "sell": 90.74,
-      "spread": 1.03,
+      "buy": 140.8,
+      "sell": 142.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-12",
-      "buy": 89.72,
-      "sell": 90.75,
-      "spread": 1.03,
+      "buy": 140.8,
+      "sell": 142.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-13",
-      "buy": 89.41,
-      "sell": 90.44,
-      "spread": 1.03,
+      "buy": 142.1,
+      "sell": 144.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-14",
-      "buy": 89.13,
-      "sell": 90.16,
-      "spread": 1.03,
+      "buy": 144.1,
+      "sell": 146.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-15",
-      "buy": 89.17,
-      "sell": 90.21,
-      "spread": 1.04,
+      "buy": 146,
+      "sell": 148,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-16",
-      "buy": 89.5,
-      "sell": 90.54,
-      "spread": 1.04,
+      "buy": 147.1,
+      "sell": 149.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-17",
-      "buy": 89.83,
-      "sell": 90.88,
-      "spread": 1.05,
+      "buy": 151.5,
+      "sell": 153,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-10-18",
-      "buy": 89.9,
-      "sell": 90.95,
-      "spread": 1.05,
+      "buy": 149.5,
+      "sell": 151,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-10-19",
-      "buy": 89.75,
-      "sell": 90.8,
-      "spread": 1.05,
+      "buy": 149.5,
+      "sell": 151,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-10-20",
-      "buy": 89.56,
-      "sell": 90.61,
-      "spread": 1.05,
+      "buy": 150.5,
+      "sell": 151.5,
+      "spread": 1,
       "eventId": null
     },
     {
       "date": "2025-10-21",
-      "buy": 89.38,
-      "sell": 90.43,
-      "spread": 1.05,
+      "buy": 151.5,
+      "sell": 152.5,
+      "spread": 1,
       "eventId": null
     },
     {
       "date": "2025-10-22",
-      "buy": 89.58,
-      "sell": 90.62,
-      "spread": 1.04,
-      "eventId": "year-end-demand"
+      "buy": 146.6,
+      "sell": 148.6,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2025-10-23",
-      "buy": 88.74,
-      "sell": 89.77,
-      "spread": 1.03,
+      "buy": 147.5,
+      "sell": 149.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-24",
-      "buy": 88.35,
-      "sell": 89.37,
-      "spread": 1.02,
+      "buy": 146.5,
+      "sell": 148.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-25",
-      "buy": 88.19,
-      "sell": 89.2,
-      "spread": 1.01,
+      "buy": 147.2,
+      "sell": 149.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-26",
-      "buy": 88.32,
-      "sell": 89.32,
-      "spread": 1,
+      "buy": 147.2,
+      "sell": 149.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-27",
-      "buy": 88.5,
-      "sell": 89.49,
-      "spread": 0.99,
+      "buy": 146.9,
+      "sell": 148.4,
+      "spread": 1.5,
       "eventId": null
     },
     {
       "date": "2025-10-28",
-      "buy": 88.38,
-      "sell": 89.36,
-      "spread": 0.98,
+      "buy": 143.1,
+      "sell": 145.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-29",
-      "buy": 87.89,
-      "sell": 88.87,
-      "spread": 0.98,
+      "buy": 146.1,
+      "sell": 148.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-30",
-      "buy": 87.29,
-      "sell": 88.26,
-      "spread": 0.97,
+      "buy": 145.8,
+      "sell": 147.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-10-31",
-      "buy": 86.92,
-      "sell": 87.89,
-      "spread": 0.97,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-01",
-      "buy": 86.86,
-      "sell": 87.83,
-      "spread": 0.97,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-02",
-      "buy": 86.94,
-      "sell": 87.92,
-      "spread": 0.98,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-03",
-      "buy": 86.96,
-      "sell": 87.95,
-      "spread": 0.99,
+      "buy": 147,
+      "sell": 149,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-04",
-      "buy": 86.95,
-      "sell": 87.95,
-      "spread": 1,
+      "buy": 146.2,
+      "sell": 148.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-05",
-      "buy": 87.02,
-      "sell": 88.03,
-      "spread": 1.01,
+      "buy": 145.5,
+      "sell": 147.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-06",
-      "buy": 87.15,
-      "sell": 88.18,
-      "spread": 1.03,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-07",
-      "buy": 87.18,
-      "sell": 88.22,
-      "spread": 1.04,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-08",
-      "buy": 86.98,
-      "sell": 88.04,
-      "spread": 1.06,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-09",
-      "buy": 86.68,
-      "sell": 87.76,
-      "spread": 1.08,
+      "buy": 146.4,
+      "sell": 148.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-10",
-      "buy": 86.61,
-      "sell": 87.7,
-      "spread": 1.09,
+      "buy": 148.2,
+      "sell": 150.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-11",
-      "buy": 86.94,
-      "sell": 88.05,
-      "spread": 1.11,
+      "buy": 150,
+      "sell": 152,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-12",
-      "buy": 87.51,
-      "sell": 88.63,
-      "spread": 1.12,
+      "buy": 149.5,
+      "sell": 151.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-13",
-      "buy": 87.93,
-      "sell": 89.06,
-      "spread": 1.13,
+      "buy": 152.5,
+      "sell": 154.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-14",
-      "buy": 88.01,
-      "sell": 89.14,
-      "spread": 1.13,
-      "eventId": "short-pullback"
+      "buy": 151.2,
+      "sell": 153.2,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2025-11-15",
-      "buy": 87.86,
-      "sell": 88.99,
-      "spread": 1.13,
+      "buy": 149,
+      "sell": 151,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-16",
-      "buy": 87.75,
-      "sell": 88.88,
-      "spread": 1.13,
+      "buy": 149,
+      "sell": 151,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-17",
-      "buy": 87.79,
-      "sell": 88.92,
-      "spread": 1.13,
+      "buy": 149,
+      "sell": 151,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-18",
-      "buy": 87.88,
-      "sell": 89.01,
-      "spread": 1.13,
+      "buy": 147.3,
+      "sell": 149.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-19",
-      "buy": 87.9,
-      "sell": 89.02,
-      "spread": 1.12,
+      "buy": 149,
+      "sell": 151,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-20",
-      "buy": 87.93,
-      "sell": 89.05,
-      "spread": 1.12,
+      "buy": 148.3,
+      "sell": 150.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-21",
-      "buy": 88.12,
-      "sell": 89.23,
-      "spread": 1.11,
+      "buy": 147.8,
+      "sell": 149.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-22",
-      "buy": 88.42,
-      "sell": 89.53,
-      "spread": 1.11,
+      "buy": 148.4,
+      "sell": 150.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-23",
-      "buy": 88.6,
-      "sell": 89.71,
-      "spread": 1.11,
+      "buy": 148.4,
+      "sell": 150.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-24",
-      "buy": 88.41,
-      "sell": 89.52,
-      "spread": 1.11,
+      "buy": 148.4,
+      "sell": 150.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-25",
-      "buy": 87.92,
-      "sell": 89.03,
-      "spread": 1.11,
+      "buy": 150.9,
+      "sell": 152.9,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-26",
-      "buy": 87.47,
-      "sell": 88.59,
-      "spread": 1.12,
+      "buy": 151.4,
+      "sell": 153.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-27",
-      "buy": 87.36,
-      "sell": 88.49,
-      "spread": 1.13,
+      "buy": 151.4,
+      "sell": 153.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-28",
-      "buy": 87.55,
-      "sell": 88.69,
-      "spread": 1.14,
+      "buy": 152.2,
+      "sell": 154.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-29",
-      "buy": 87.77,
-      "sell": 88.92,
-      "spread": 1.15,
+      "buy": 152.9,
+      "sell": 154.9,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-11-30",
-      "buy": 87.79,
-      "sell": 88.95,
-      "spread": 1.16,
+      "buy": 152.9,
+      "sell": 154.9,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-01",
-      "buy": 87.63,
-      "sell": 88.8,
-      "spread": 1.17,
+      "buy": 153.2,
+      "sell": 155.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-02",
-      "buy": 87.49,
-      "sell": 88.67,
-      "spread": 1.18,
+      "buy": 152.5,
+      "sell": 154.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-03",
-      "buy": 87.4,
-      "sell": 88.58,
-      "spread": 1.18,
+      "buy": 152.5,
+      "sell": 154.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-04",
-      "buy": 87.28,
-      "sell": 88.47,
-      "spread": 1.19,
+      "buy": 151.8,
+      "sell": 153.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-05",
-      "buy": 87.06,
-      "sell": 88.25,
-      "spread": 1.19,
+      "buy": 152.9,
+      "sell": 154.9,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-06",
-      "buy": 86.89,
-      "sell": 88.08,
-      "spread": 1.19,
+      "buy": 152.2,
+      "sell": 154.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-07",
-      "buy": 87.01,
-      "sell": 88.19,
-      "spread": 1.18,
+      "buy": 152.2,
+      "sell": 154.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-08",
-      "buy": 87.47,
-      "sell": 88.64,
-      "spread": 1.17,
+      "buy": 152.5,
+      "sell": 154.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-09",
-      "buy": 88.01,
-      "sell": 89.17,
-      "spread": 1.16,
+      "buy": 151.7,
+      "sell": 153.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-10",
-      "buy": 88.27,
-      "sell": 89.41,
-      "spread": 1.14,
+      "buy": 152.7,
+      "sell": 154.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-11",
-      "buy": 88.19,
-      "sell": 89.32,
-      "spread": 1.13,
+      "buy": 152.5,
+      "sell": 154.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-12",
-      "buy": 88.02,
-      "sell": 89.13,
-      "spread": 1.11,
+      "buy": 153.6,
+      "sell": 155.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-13",
-      "buy": 88.08,
-      "sell": 89.17,
-      "spread": 1.09,
+      "buy": 154.3,
+      "sell": 156.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-14",
-      "buy": 88.44,
-      "sell": 89.52,
-      "spread": 1.08,
+      "buy": 154.3,
+      "sell": 156.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-15",
-      "buy": 88.92,
-      "sell": 89.98,
-      "spread": 1.06,
-      "eventId": "wedding-season"
+      "buy": 155.2,
+      "sell": 157.2,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2025-12-16",
-      "buy": 88.54,
-      "sell": 89.59,
-      "spread": 1.05,
+      "buy": 153.6,
+      "sell": 155.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-17",
-      "buy": 89.71,
-      "sell": 90.75,
-      "spread": 1.04,
+      "buy": 154.2,
+      "sell": 156.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-18",
-      "buy": 90.13,
-      "sell": 91.16,
-      "spread": 1.03,
+      "buy": 154.4,
+      "sell": 156.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-19",
-      "buy": 90.59,
-      "sell": 91.62,
-      "spread": 1.03,
+      "buy": 154.4,
+      "sell": 156.4,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-20",
-      "buy": 90.9,
-      "sell": 91.92,
-      "spread": 1.02,
+      "buy": 154.6,
+      "sell": 156.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-21",
-      "buy": 90.92,
-      "sell": 91.94,
-      "spread": 1.02,
+      "buy": 154.6,
+      "sell": 156.6,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-22",
-      "buy": 90.8,
-      "sell": 91.83,
-      "spread": 1.03,
+      "buy": 155.5,
+      "sell": 157.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-23",
-      "buy": 90.88,
-      "sell": 91.91,
-      "spread": 1.03,
+      "buy": 157,
+      "sell": 159,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-24",
-      "buy": 91.32,
-      "sell": 92.36,
-      "spread": 1.04,
+      "buy": 157.2,
+      "sell": 159.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-25",
-      "buy": 91.96,
-      "sell": 93,
-      "spread": 1.04,
+      "buy": 156.8,
+      "sell": 158.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-26",
-      "buy": 92.41,
-      "sell": 93.46,
-      "spread": 1.05,
+      "buy": 157.2,
+      "sell": 159.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-27",
-      "buy": 92.49,
-      "sell": 93.54,
-      "spread": 1.05,
+      "buy": 157.7,
+      "sell": 159.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-28",
-      "buy": 92.34,
-      "sell": 93.39,
-      "spread": 1.05,
+      "buy": 157.7,
+      "sell": 159.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-29",
-      "buy": 92.21,
-      "sell": 93.26,
-      "spread": 1.05,
+      "buy": 156.8,
+      "sell": 158.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-30",
-      "buy": 92.21,
-      "sell": 93.25,
-      "spread": 1.04,
+      "buy": 152.7,
+      "sell": 154.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2025-12-31",
-      "buy": 92.24,
-      "sell": 93.28,
-      "spread": 1.04,
+      "buy": 150.8,
+      "sell": 152.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-01",
-      "buy": 92.2,
-      "sell": 93.23,
-      "spread": 1.03,
+      "buy": 150.8,
+      "sell": 152.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-02",
-      "buy": 92.19,
-      "sell": 93.21,
-      "spread": 1.02,
+      "buy": 150.8,
+      "sell": 152.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-03",
-      "buy": 92.37,
-      "sell": 93.38,
-      "spread": 1.01,
+      "buy": 150.8,
+      "sell": 152.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-04",
-      "buy": 92.69,
-      "sell": 93.69,
-      "spread": 1,
+      "buy": 150.8,
+      "sell": 152.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-05",
-      "buy": 92.9,
-      "sell": 93.89,
-      "spread": 0.99,
-      "eventId": "new-year"
+      "buy": 154.8,
+      "sell": 156.8,
+      "spread": 2,
+      "eventId": null
     },
     {
       "date": "2026-01-06",
-      "buy": 92.76,
-      "sell": 93.74,
-      "spread": 0.98,
+      "buy": 156,
+      "sell": 158,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-07",
-      "buy": 92.36,
-      "sell": 93.34,
-      "spread": 0.98,
+      "buy": 156.1,
+      "sell": 158.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-08",
-      "buy": 92.03,
-      "sell": 93,
-      "spread": 0.97,
+      "buy": 155.2,
+      "sell": 157.2,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-09",
-      "buy": 92.06,
-      "sell": 93.03,
-      "spread": 0.97,
+      "buy": 156.3,
+      "sell": 158.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-10",
-      "buy": 92.43,
-      "sell": 93.41,
-      "spread": 0.98,
+      "buy": 157.8,
+      "sell": 159.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-11",
-      "buy": 92.85,
-      "sell": 93.83,
-      "spread": 0.98,
+      "buy": 157.8,
+      "sell": 159.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-12",
-      "buy": 93.08,
-      "sell": 94.07,
-      "spread": 0.99,
+      "buy": 160,
+      "sell": 162,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-13",
-      "buy": 93.17,
-      "sell": 94.17,
-      "spread": 1,
+      "buy": 160,
+      "sell": 162,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-14",
-      "buy": 93.28,
-      "sell": 94.3,
-      "spread": 1.02,
+      "buy": 160.9,
+      "sell": 162.9,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-15",
-      "buy": 93.45,
-      "sell": 94.49,
-      "spread": 1.04,
+      "buy": 160.8,
+      "sell": 162.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-16",
-      "buy": 93.56,
-      "sell": 94.61,
-      "spread": 1.05,
+      "buy": 160.8,
+      "sell": 162.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-17",
-      "buy": 93.56,
-      "sell": 94.63,
-      "spread": 1.07,
+      "buy": 160.8,
+      "sell": 162.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-18",
-      "buy": 93.58,
-      "sell": 94.67,
-      "spread": 1.09,
+      "buy": 160.8,
+      "sell": 162.8,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-19",
-      "buy": 93.88,
-      "sell": 94.98,
-      "spread": 1.1,
+      "buy": 163,
+      "sell": 165,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-20",
-      "buy": 94.49,
-      "sell": 95.61,
-      "spread": 1.12,
+      "buy": 164.1,
+      "sell": 166.1,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-21",
-      "buy": 95.13,
-      "sell": 96.26,
-      "spread": 1.13,
+      "buy": 168.7,
+      "sell": 170.7,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-22",
-      "buy": 95.45,
-      "sell": 96.58,
-      "spread": 1.13,
+      "buy": 167.3,
+      "sell": 169.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-23",
-      "buy": 95.38,
-      "sell": 96.52,
-      "spread": 1.14,
+      "buy": 171.3,
+      "sell": 173.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-24",
-      "buy": 95.17,
-      "sell": 96.31,
-      "spread": 1.14,
+      "buy": 172.3,
+      "sell": 174.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-25",
-      "buy": 95.14,
-      "sell": 96.28,
-      "spread": 1.14,
+      "buy": 172.3,
+      "sell": 174.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-26",
-      "buy": 95.36,
-      "sell": 96.49,
-      "spread": 1.13,
+      "buy": 174.5,
+      "sell": 176.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-27",
-      "buy": 95.63,
-      "sell": 96.76,
-      "spread": 1.13,
+      "buy": 175.3,
+      "sell": 177.3,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-01-28",
-      "buy": 95.79,
-      "sell": 96.91,
-      "spread": 1.12,
+      "buy": 180.1,
+      "sell": 182.6,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-01-29",
-      "buy": 95.88,
-      "sell": 97,
-      "spread": 1.12,
+      "buy": 188.3,
+      "sell": 191.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-01-30",
-      "buy": 95.99,
-      "sell": 97.11,
-      "spread": 1.12,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-01-31",
-      "buy": 96.11,
-      "sell": 97.22,
-      "spread": 1.11,
+      "buy": 169,
+      "sell": 172,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-01",
-      "buy": 96.04,
-      "sell": 97.15,
-      "spread": 1.11,
+      "buy": 169,
+      "sell": 172,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-02",
-      "buy": 95.66,
-      "sell": 96.77,
-      "spread": 1.11,
+      "buy": 163,
+      "sell": 166,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-03",
-      "buy": 95.13,
-      "sell": 96.25,
-      "spread": 1.12,
+      "buy": 172,
+      "sell": 175,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-04",
-      "buy": 94.81,
-      "sell": 95.93,
-      "spread": 1.12,
+      "buy": 177.2,
+      "sell": 180.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-05",
-      "buy": 94.86,
-      "sell": 95.99,
-      "spread": 1.13,
+      "buy": 174.2,
+      "sell": 177.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-06",
-      "buy": 95.11,
-      "sell": 96.25,
-      "spread": 1.14,
+      "buy": 173.5,
+      "sell": 176.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-07",
-      "buy": 95.21,
-      "sell": 96.36,
-      "spread": 1.15,
+      "buy": 176.3,
+      "sell": 179.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-08",
-      "buy": 94.96,
-      "sell": 96.12,
-      "spread": 1.16,
+      "buy": 176.3,
+      "sell": 179.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-09",
-      "buy": 94.52,
-      "sell": 95.69,
-      "spread": 1.17,
+      "buy": 178.2,
+      "sell": 181.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-10",
-      "buy": 94.14,
-      "sell": 95.32,
-      "spread": 1.18,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-11",
-      "buy": 93.92,
-      "sell": 95.1,
-      "spread": 1.18,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-12",
-      "buy": 93.75,
-      "sell": 94.94,
-      "spread": 1.19,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-13",
-      "buy": 93.56,
-      "sell": 94.75,
-      "spread": 1.19,
+      "buy": 176,
+      "sell": 179,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-14",
-      "buy": 93.44,
-      "sell": 94.62,
-      "spread": 1.18,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-15",
-      "buy": 94.25,
-      "sell": 95.43,
-      "spread": 1.18,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-16",
-      "buy": 93.84,
-      "sell": 95,
-      "spread": 1.16,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-17",
-      "buy": 94.03,
-      "sell": 95.18,
-      "spread": 1.15,
-      "eventId": "after-tet"
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
+      "eventId": null
     },
     {
       "date": "2026-02-18",
-      "buy": 93.89,
-      "sell": 95.03,
-      "spread": 1.14,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-19",
-      "buy": 93.5,
-      "sell": 94.62,
-      "spread": 1.12,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-20",
-      "buy": 93.19,
-      "sell": 94.29,
-      "spread": 1.1,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-21",
-      "buy": 93.25,
-      "sell": 94.33,
-      "spread": 1.08,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-22",
-      "buy": 93.63,
-      "sell": 94.7,
-      "spread": 1.07,
+      "buy": 178,
+      "sell": 181,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-23",
-      "buy": 94.03,
-      "sell": 95.08,
-      "spread": 1.05,
+      "buy": 181.6,
+      "sell": 184.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-24",
-      "buy": 94.23,
-      "sell": 95.27,
-      "spread": 1.04,
+      "buy": 181.6,
+      "sell": 184.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-25",
-      "buy": 94.29,
-      "sell": 95.32,
-      "spread": 1.03,
+      "buy": 182.3,
+      "sell": 185.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-26",
-      "buy": 94.34,
-      "sell": 95.36,
-      "spread": 1.02,
+      "buy": 182.5,
+      "sell": 185.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-27",
-      "buy": 94.41,
-      "sell": 95.43,
-      "spread": 1.02,
+      "buy": 181,
+      "sell": 184,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-02-28",
-      "buy": 94.38,
-      "sell": 95.4,
-      "spread": 1.02,
+      "buy": 184,
+      "sell": 187,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-01",
-      "buy": 94.2,
-      "sell": 95.22,
-      "spread": 1.02,
+      "buy": 184,
+      "sell": 187,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-02",
-      "buy": 94.01,
-      "sell": 95.03,
-      "spread": 1.02,
+      "buy": 186.9,
+      "sell": 189.9,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-03",
-      "buy": 94.09,
-      "sell": 95.12,
-      "spread": 1.03,
+      "buy": 185.2,
+      "sell": 188.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-04",
-      "buy": 94.45,
-      "sell": 95.48,
-      "spread": 1.03,
+      "buy": 181.2,
+      "sell": 184.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-05",
-      "buy": 94.81,
-      "sell": 95.85,
-      "spread": 1.04,
+      "buy": 181.7,
+      "sell": 184.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-06",
-      "buy": 94.84,
-      "sell": 95.88,
-      "spread": 1.04,
+      "buy": 180.8,
+      "sell": 183.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-07",
-      "buy": 94.47,
-      "sell": 95.52,
-      "spread": 1.05,
+      "buy": 182,
+      "sell": 185,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-08",
-      "buy": 93.97,
-      "sell": 95.02,
-      "spread": 1.05,
+      "buy": 182,
+      "sell": 185,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-09",
-      "buy": 93.65,
-      "sell": 94.7,
-      "spread": 1.05,
+      "buy": 181.1,
+      "sell": 184.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-10",
-      "buy": 93.58,
-      "sell": 94.62,
-      "spread": 1.04,
+      "buy": 183.1,
+      "sell": 186.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-11",
-      "buy": 93.58,
-      "sell": 94.62,
-      "spread": 1.04,
+      "buy": 184.2,
+      "sell": 187.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-12",
-      "buy": 93.5,
-      "sell": 94.53,
-      "spread": 1.03,
+      "buy": 183.3,
+      "sell": 186.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-13",
-      "buy": 93.4,
-      "sell": 94.42,
-      "spread": 1.02,
+      "buy": 181.8,
+      "sell": 184.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-14",
-      "buy": 93.38,
-      "sell": 94.39,
-      "spread": 1.01,
+      "buy": 179.6,
+      "sell": 182.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-15",
-      "buy": 93.4,
-      "sell": 94.4,
-      "spread": 1,
+      "buy": 179.6,
+      "sell": 182.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-16",
-      "buy": 93.27,
-      "sell": 94.26,
-      "spread": 0.99,
+      "buy": 180.1,
+      "sell": 183.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-17",
-      "buy": 92.88,
-      "sell": 93.86,
-      "spread": 0.98,
+      "buy": 180,
+      "sell": 183,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-18",
-      "buy": 92.4,
-      "sell": 93.38,
-      "spread": 0.98,
+      "buy": 180,
+      "sell": 183,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-19",
-      "buy": 92.18,
-      "sell": 93.16,
-      "spread": 0.98,
+      "buy": 175.4,
+      "sell": 178.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-20",
-      "buy": 92.38,
-      "sell": 93.36,
-      "spread": 0.98,
+      "buy": 173.1,
+      "sell": 176.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-21",
-      "buy": 93.83,
-      "sell": 94.81,
-      "spread": 0.98,
-      "eventId": "global-volatility"
+      "buy": 168,
+      "sell": 171,
+      "spread": 3,
+      "eventId": null
     },
     {
       "date": "2026-03-22",
-      "buy": 93.16,
-      "sell": 94.15,
-      "spread": 0.99,
+      "buy": 168,
+      "sell": 171,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-23",
-      "buy": 93.2,
-      "sell": 94.2,
-      "spread": 1,
+      "buy": 162,
+      "sell": 165,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-24",
-      "buy": 93.08,
-      "sell": 94.09,
-      "spread": 1.01,
+      "buy": 166,
+      "sell": 169,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-25",
-      "buy": 93.05,
-      "sell": 94.08,
-      "spread": 1.03,
+      "buy": 170.5,
+      "sell": 173.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-26",
-      "buy": 93.18,
-      "sell": 94.22,
-      "spread": 1.04,
+      "buy": 168.5,
+      "sell": 171.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-27",
-      "buy": 93.37,
-      "sell": 94.43,
-      "spread": 1.06,
+      "buy": 168.6,
+      "sell": 171.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-28",
-      "buy": 93.52,
-      "sell": 94.6,
-      "spread": 1.08,
+      "buy": 169.8,
+      "sell": 172.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-29",
-      "buy": 93.76,
-      "sell": 94.86,
-      "spread": 1.1,
+      "buy": 169.8,
+      "sell": 172.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-30",
-      "buy": 94.22,
-      "sell": 95.33,
-      "spread": 1.11,
+      "buy": 170.8,
+      "sell": 173.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-03-31",
-      "buy": 94.84,
-      "sell": 95.96,
-      "spread": 1.12,
+      "buy": 171.9,
+      "sell": 174.9,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-01",
-      "buy": 95.34,
-      "sell": 96.47,
-      "spread": 1.13,
+      "buy": 173.7,
+      "sell": 176.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-02",
-      "buy": 95.46,
-      "sell": 96.6,
-      "spread": 1.14,
+      "buy": 168.8,
+      "sell": 172.8,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-04-03",
-      "buy": 95.3,
-      "sell": 96.44,
-      "spread": 1.14,
+      "buy": 171,
+      "sell": 174.5,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-04",
-      "buy": 95.2,
-      "sell": 96.34,
-      "spread": 1.14,
+      "buy": 171.5,
+      "sell": 174.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-05",
-      "buy": 95.42,
-      "sell": 96.56,
-      "spread": 1.14,
+      "buy": 171.5,
+      "sell": 174.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-06",
-      "buy": 95.92,
-      "sell": 97.06,
-      "spread": 1.14,
+      "buy": 170.1,
+      "sell": 173.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-07",
-      "buy": 96.4,
-      "sell": 97.53,
-      "spread": 1.13,
+      "buy": 169.5,
+      "sell": 172.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-08",
-      "buy": 96.67,
-      "sell": 97.8,
-      "spread": 1.13,
+      "buy": 171,
+      "sell": 175,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-04-09",
-      "buy": 96.77,
-      "sell": 97.89,
-      "spread": 1.12,
+      "buy": 168.5,
+      "sell": 171.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-10",
-      "buy": 96.85,
-      "sell": 97.97,
-      "spread": 1.12,
+      "buy": 169.7,
+      "sell": 172.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-11",
-      "buy": 96.93,
-      "sell": 98.04,
-      "spread": 1.11,
+      "buy": 169.4,
+      "sell": 172.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-12",
-      "buy": 96.89,
-      "sell": 98,
-      "spread": 1.11,
+      "buy": 169.4,
+      "sell": 172.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-13",
-      "buy": 96.68,
-      "sell": 97.8,
-      "spread": 1.12,
+      "buy": 168.5,
+      "sell": 171.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-14",
-      "buy": 96.48,
-      "sell": 97.6,
-      "spread": 1.12,
+      "buy": 170.5,
+      "sell": 173,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-15",
-      "buy": 96.57,
-      "sell": 97.7,
-      "spread": 1.13,
+      "buy": 170.5,
+      "sell": 174,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-16",
-      "buy": 96.95,
-      "sell": 98.08,
-      "spread": 1.13,
+      "buy": 168.5,
+      "sell": 172,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-17",
-      "buy": 97.36,
-      "sell": 98.5,
-      "spread": 1.14,
+      "buy": 167.5,
+      "sell": 171,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-18",
-      "buy": 97.46,
-      "sell": 98.61,
-      "spread": 1.15,
+      "buy": 168.5,
+      "sell": 172,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-19",
-      "buy": 97.2,
-      "sell": 98.36,
-      "spread": 1.16,
+      "buy": 168.5,
+      "sell": 172,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-04-20",
-      "buy": 96.85,
-      "sell": 98.02,
-      "spread": 1.17,
+      "buy": 168.3,
+      "sell": 171.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-04-21",
-      "buy": 96.72,
-      "sell": 97.9,
-      "spread": 1.18,
+      "buy": 168.1,
+      "sell": 170.6,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-22",
-      "buy": 96.86,
-      "sell": 98.04,
-      "spread": 1.18,
+      "buy": 167.5,
+      "sell": 170,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-23",
-      "buy": 97.08,
-      "sell": 98.26,
-      "spread": 1.18,
-      "eventId": null
-    },
-    {
-      "date": "2026-04-24",
-      "buy": 97.27,
-      "sell": 98.45,
-      "spread": 1.18,
+      "buy": 166.7,
+      "sell": 169.2,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-25",
-      "buy": 97.47,
-      "sell": 98.65,
-      "spread": 1.18,
+      "buy": 166.3,
+      "sell": 168.8,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-26",
-      "buy": 97.79,
-      "sell": 98.96,
-      "spread": 1.17,
+      "buy": 166.3,
+      "sell": 168.8,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-04-27",
-      "buy": 98.16,
-      "sell": 99.32,
-      "spread": 1.16,
-      "eventId": null
-    },
-    {
-      "date": "2026-04-28",
-      "buy": 98.38,
-      "sell": 99.52,
-      "spread": 1.14,
-      "eventId": null
-    },
-    {
-      "date": "2026-04-29",
-      "buy": 98.33,
-      "sell": 99.46,
-      "spread": 1.13,
-      "eventId": null
-    },
-    {
-      "date": "2026-04-30",
-      "buy": 98.19,
-      "sell": 99.3,
-      "spread": 1.11,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-01",
-      "buy": 98.3,
-      "sell": 99.39,
-      "spread": 1.09,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-02",
-      "buy": 98.81,
-      "sell": 99.89,
-      "spread": 1.08,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-03",
-      "buy": 99.54,
-      "sell": 100.6,
-      "spread": 1.06,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-04",
-      "buy": 100.1,
-      "sell": 101.15,
-      "spread": 1.05,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-05",
-      "buy": 100.34,
-      "sell": 101.37,
-      "spread": 1.03,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-06",
-      "buy": 100.39,
-      "sell": 101.41,
-      "spread": 1.02,
-      "eventId": null
-    },
-    {
-      "date": "2026-05-07",
-      "buy": 100.47,
-      "sell": 101.49,
-      "spread": 1.02,
+      "buy": 166.3,
+      "sell": 168.8,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-05-08",
-      "buy": 100.66,
-      "sell": 101.68,
-      "spread": 1.02,
+      "buy": 164.5,
+      "sell": 167.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-09",
-      "buy": 100.83,
-      "sell": 101.85,
-      "spread": 1.02,
+      "buy": 164.5,
+      "sell": 167.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-10",
-      "buy": 100.92,
-      "sell": 101.94,
-      "spread": 1.02,
-      "eventId": "investment-demand"
+      "buy": 164.5,
+      "sell": 167.5,
+      "spread": 3,
+      "eventId": null
     },
     {
       "date": "2026-05-11",
-      "buy": 101.04,
-      "sell": 102.06,
-      "spread": 1.02,
+      "buy": 162.2,
+      "sell": 165.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-12",
-      "buy": 101.36,
-      "sell": 102.39,
-      "spread": 1.03,
+      "buy": 162.5,
+      "sell": 165.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-13",
-      "buy": 101.8,
-      "sell": 102.83,
-      "spread": 1.03,
+      "buy": 162,
+      "sell": 165,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-14",
-      "buy": 102.06,
-      "sell": 103.1,
-      "spread": 1.04,
+      "buy": 162,
+      "sell": 165,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-15",
-      "buy": 101.92,
-      "sell": 102.96,
-      "spread": 1.04,
+      "buy": 161,
+      "sell": 164,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-16",
-      "buy": 101.47,
-      "sell": 102.51,
-      "spread": 1.04,
+      "buy": 160.5,
+      "sell": 163.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-17",
-      "buy": 101.06,
-      "sell": 102.1,
-      "spread": 1.04,
+      "buy": 160.5,
+      "sell": 163.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-18",
-      "buy": 100.97,
-      "sell": 102.01,
-      "spread": 1.04,
+      "buy": 161.3,
+      "sell": 163.8,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-05-19",
-      "buy": 101.15,
-      "sell": 102.19,
-      "spread": 1.04,
+      "buy": 161,
+      "sell": 163.5,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-05-20",
-      "buy": 101.3,
-      "sell": 102.33,
-      "spread": 1.03,
+      "buy": 159,
+      "sell": 162,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-21",
-      "buy": 101.26,
-      "sell": 102.29,
-      "spread": 1.03,
+      "buy": 159.4,
+      "sell": 162.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-22",
-      "buy": 101.09,
-      "sell": 102.11,
-      "spread": 1.02,
+      "buy": 159,
+      "sell": 162,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-23",
-      "buy": 100.93,
-      "sell": 101.94,
-      "spread": 1.01,
+      "buy": 158.5,
+      "sell": 161.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-24",
-      "buy": 100.8,
-      "sell": 101.8,
-      "spread": 1,
+      "buy": 158.5,
+      "sell": 161.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-25",
-      "buy": 100.55,
-      "sell": 101.54,
-      "spread": 0.99,
+      "buy": 159,
+      "sell": 162,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-26",
-      "buy": 100.16,
-      "sell": 101.14,
-      "spread": 0.98,
+      "buy": 158.5,
+      "sell": 161.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-27",
-      "buy": 99.83,
-      "sell": 100.81,
-      "spread": 0.98,
+      "buy": 157.7,
+      "sell": 160.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-28",
-      "buy": 99.82,
-      "sell": 100.8,
-      "spread": 0.98,
+      "buy": 154.5,
+      "sell": 157.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-29",
-      "buy": 100.15,
-      "sell": 101.13,
-      "spread": 0.98,
+      "buy": 155.5,
+      "sell": 158.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-30",
-      "buy": 100.52,
-      "sell": 101.5,
-      "spread": 0.98,
+      "buy": 156,
+      "sell": 159,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-05-31",
-      "buy": 100.6,
-      "sell": 101.59,
-      "spread": 0.99,
+      "buy": 156,
+      "sell": 159,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-01",
-      "buy": 100.34,
-      "sell": 101.35,
-      "spread": 1.01,
+      "buy": 155.5,
+      "sell": 158.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-02",
-      "buy": 100.01,
-      "sell": 101.03,
-      "spread": 1.02,
+      "buy": 154.5,
+      "sell": 157.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-03",
-      "buy": 99.9,
-      "sell": 100.94,
-      "spread": 1.04,
+      "buy": 154,
+      "sell": 157,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-04",
-      "buy": 100.04,
-      "sell": 101.09,
-      "spread": 1.05,
+      "buy": 153,
+      "sell": 156,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-05",
-      "buy": 100.26,
-      "sell": 101.33,
-      "spread": 1.07,
+      "buy": 149.2,
+      "sell": 153.2,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-06-06",
-      "buy": 100.43,
-      "sell": 101.52,
-      "spread": 1.09,
+      "buy": 146.2,
+      "sell": 150.2,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-06-07",
-      "buy": 100.6,
-      "sell": 101.7,
-      "spread": 1.1,
+      "buy": 146.2,
+      "sell": 150.2,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-06-08",
-      "buy": 100.87,
-      "sell": 101.99,
-      "spread": 1.12,
+      "buy": 138.8,
+      "sell": 143.8,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-06-09",
-      "buy": 101.16,
-      "sell": 102.29,
-      "spread": 1.13,
+      "buy": 138.8,
+      "sell": 143.8,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-06-10",
-      "buy": 101.25,
-      "sell": 102.39,
-      "spread": 1.14,
+      "buy": 133.3,
+      "sell": 138.3,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-06-11",
-      "buy": 101.03,
-      "sell": 102.17,
-      "spread": 1.14,
+      "buy": 133.4,
+      "sell": 138.4,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-06-12",
-      "buy": 100.68,
-      "sell": 101.83,
-      "spread": 1.15,
+      "buy": 142.4,
+      "sell": 145.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-13",
-      "buy": 100.55,
-      "sell": 101.7,
-      "spread": 1.15,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-14",
-      "buy": 100.79,
-      "sell": 101.93,
-      "spread": 1.14,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-15",
-      "buy": 101.2,
-      "sell": 102.34,
-      "spread": 1.14,
+      "buy": 148,
+      "sell": 150.5,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-06-16",
-      "buy": 101.42,
-      "sell": 102.55,
-      "spread": 1.13,
+      "buy": 149.5,
+      "sell": 151.5,
+      "spread": 2,
       "eventId": null
     },
     {
       "date": "2026-06-17",
-      "buy": 101.29,
-      "sell": 102.42,
-      "spread": 1.13,
+      "buy": 148.8,
+      "sell": 151.3,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-06-18",
-      "buy": 102.17,
-      "sell": 103.29,
-      "spread": 1.12,
+      "buy": 148.8,
+      "sell": 151.3,
+      "spread": 2.5,
       "eventId": null
     },
     {
       "date": "2026-06-19",
-      "buy": 100.69,
-      "sell": 101.81,
-      "spread": 1.12,
+      "buy": 143.7,
+      "sell": 146.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-20",
-      "buy": 100.48,
-      "sell": 101.6,
-      "spread": 1.12,
+      "buy": 144.2,
+      "sell": 147.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-21",
-      "buy": 100.25,
-      "sell": 101.37,
-      "spread": 1.12,
+      "buy": 144.2,
+      "sell": 147.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-22",
-      "buy": 99.96,
-      "sell": 101.08,
-      "spread": 1.12,
+      "buy": 145.6,
+      "sell": 148.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-23",
-      "buy": 99.73,
-      "sell": 100.85,
-      "spread": 1.12,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-24",
-      "buy": 99.73,
-      "sell": 100.86,
-      "spread": 1.13,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-25",
-      "buy": 99.89,
-      "sell": 101.03,
-      "spread": 1.14,
+      "buy": 143.2,
+      "sell": 146.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-26",
-      "buy": 99.91,
-      "sell": 101.05,
-      "spread": 1.14,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-27",
-      "buy": 99.57,
-      "sell": 100.72,
-      "spread": 1.15,
+      "buy": 145.5,
+      "sell": 148.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-28",
-      "buy": 98.97,
-      "sell": 100.13,
-      "spread": 1.16,
+      "buy": 145.5,
+      "sell": 148.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-29",
-      "buy": 98.46,
-      "sell": 99.63,
-      "spread": 1.17,
+      "buy": 145,
+      "sell": 148,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-06-30",
-      "buy": 98.33,
-      "sell": 99.51,
-      "spread": 1.18,
+      "buy": 144,
+      "sell": 147,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-01",
-      "buy": 98.51,
-      "sell": 99.69,
-      "spread": 1.18,
-      "eventId": "psychological-level"
+      "buy": 143.4,
+      "sell": 146.4,
+      "spread": 3,
+      "eventId": null
     },
     {
       "date": "2026-07-02",
-      "buy": 98.71,
-      "sell": 99.89,
-      "spread": 1.18,
+      "buy": 145.4,
+      "sell": 148.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-03",
-      "buy": 98.77,
-      "sell": 99.95,
-      "spread": 1.18,
+      "buy": 148.4,
+      "sell": 151.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-04",
-      "buy": 98.75,
-      "sell": 99.92,
-      "spread": 1.17,
+      "buy": 148.4,
+      "sell": 151.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-05",
-      "buy": 98.79,
-      "sell": 99.95,
-      "spread": 1.16,
-      "eventId": null
-    },
-    {
-      "date": "2026-07-06",
-      "buy": 98.87,
-      "sell": 100.02,
-      "spread": 1.15,
+      "buy": 148.4,
+      "sell": 151.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-07",
-      "buy": 98.86,
-      "sell": 100,
-      "spread": 1.14,
+      "buy": 147,
+      "sell": 150,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-08",
-      "buy": 98.71,
-      "sell": 99.83,
-      "spread": 1.12,
+      "buy": 146.5,
+      "sell": 149.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-09",
-      "buy": 98.64,
-      "sell": 99.74,
-      "spread": 1.1,
+      "buy": 146,
+      "sell": 149,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-10",
-      "buy": 98.9,
-      "sell": 99.98,
-      "spread": 1.08,
+      "buy": 146.9,
+      "sell": 149.9,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-11",
-      "buy": 99.49,
-      "sell": 100.56,
-      "spread": 1.07,
+      "buy": 146.9,
+      "sell": 149.9,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-12",
-      "buy": 100.1,
-      "sell": 101.15,
-      "spread": 1.05,
+      "buy": 146.9,
+      "sell": 149.9,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-13",
-      "buy": 100.41,
-      "sell": 101.45,
-      "spread": 1.04,
+      "buy": 145.4,
+      "sell": 148.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-14",
-      "buy": 100.36,
-      "sell": 101.39,
-      "spread": 1.03,
+      "buy": 144.5,
+      "sell": 147.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-15",
-      "buy": 100.21,
-      "sell": 101.23,
-      "spread": 1.02,
+      "buy": 145.5,
+      "sell": 148.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-16",
-      "buy": 100.26,
-      "sell": 101.27,
-      "spread": 1.01,
+      "buy": 145.2,
+      "sell": 148.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-17",
-      "buy": 100.51,
-      "sell": 101.52,
-      "spread": 1.01,
+      "buy": 143.6,
+      "sell": 146.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-18",
-      "buy": 100.8,
-      "sell": 101.81,
-      "spread": 1.01,
+      "buy": 144.5,
+      "sell": 147.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-19",
-      "buy": 101.01,
-      "sell": 102.03,
-      "spread": 1.02,
+      "buy": 144.5,
+      "sell": 147.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-20",
-      "buy": 101.21,
-      "sell": 102.23,
-      "spread": 1.02,
+      "buy": 143,
+      "sell": 146,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-21",
-      "buy": 101.5,
-      "sell": 102.53,
-      "spread": 1.03,
+      "buy": 143.4,
+      "sell": 146.4,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-07-22",
-      "buy": 101.79,
-      "sell": 102.82,
-      "spread": 1.03,
+      "buy": 142,
+      "sell": 146,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-23",
-      "buy": 101.85,
-      "sell": 102.89,
-      "spread": 1.04,
+      "buy": 135,
+      "sell": 140,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-07-24",
-      "buy": 101.58,
-      "sell": 102.62,
-      "spread": 1.04,
+      "buy": 135.5,
+      "sell": 140.5,
+      "spread": 5,
       "eventId": null
     },
     {
       "date": "2026-07-25",
-      "buy": 101.19,
-      "sell": 102.23,
-      "spread": 1.04,
+      "buy": 137.5,
+      "sell": 141.5,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-26",
-      "buy": 101.03,
-      "sell": 102.07,
-      "spread": 1.04,
+      "buy": 137.5,
+      "sell": 141.5,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-27",
-      "buy": 101.26,
-      "sell": 102.3,
-      "spread": 1.04,
+      "buy": 139,
+      "sell": 143,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-28",
-      "buy": 101.66,
-      "sell": 102.7,
-      "spread": 1.04,
+      "buy": 137.5,
+      "sell": 141.5,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-29",
-      "buy": 101.91,
-      "sell": 102.94,
-      "spread": 1.03,
+      "buy": 137.5,
+      "sell": 141.5,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-30",
-      "buy": 101.84,
-      "sell": 102.86,
-      "spread": 1.02,
+      "buy": 137.7,
+      "sell": 141.7,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-07-31",
-      "buy": 101.63,
-      "sell": 102.64,
-      "spread": 1.01,
+      "buy": 137.9,
+      "sell": 141.9,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-08-01",
-      "buy": 101.49,
-      "sell": 102.5,
-      "spread": 1.01,
+      "buy": 137,
+      "sell": 141,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-08-02",
-      "buy": 101.46,
-      "sell": 102.46,
-      "spread": 1,
+      "buy": 137,
+      "sell": 141,
+      "spread": 4,
       "eventId": null
     },
     {
       "date": "2026-08-03",
-      "buy": 101.44,
-      "sell": 102.43,
-      "spread": 0.99,
+      "buy": 137.5,
+      "sell": 141,
+      "spread": 3.5,
       "eventId": null
     },
     {
       "date": "2026-08-04",
-      "buy": 101.38,
-      "sell": 102.36,
-      "spread": 0.98,
+      "buy": 137.5,
+      "sell": 140.5,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-05",
-      "buy": 101.45,
-      "sell": 102.43,
-      "spread": 0.98,
+      "buy": 138.8,
+      "sell": 141.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-06",
-      "buy": 101.79,
-      "sell": 102.77,
-      "spread": 0.98,
+      "buy": 139.7,
+      "sell": 142.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-07",
-      "buy": 102.32,
-      "sell": 103.3,
-      "spread": 0.98,
+      "buy": 139.2,
+      "sell": 142.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-08",
-      "buy": 102.73,
-      "sell": 103.72,
-      "spread": 0.99,
+      "buy": 141,
+      "sell": 144,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-09",
-      "buy": 102.79,
-      "sell": 103.79,
-      "spread": 1,
+      "buy": 141,
+      "sell": 144,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-10",
-      "buy": 102.61,
-      "sell": 103.62,
-      "spread": 1.01,
+      "buy": 141.1,
+      "sell": 144.1,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-11",
-      "buy": 102.53,
-      "sell": 103.56,
-      "spread": 1.03,
+      "buy": 140.8,
+      "sell": 143.8,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-12",
-      "buy": 102.82,
-      "sell": 103.86,
-      "spread": 1.04,
+      "buy": 141.3,
+      "sell": 144.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-13",
-      "buy": 103.39,
-      "sell": 104.45,
-      "spread": 1.06,
+      "buy": 141.3,
+      "sell": 144.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-14",
-      "buy": 103.96,
-      "sell": 105.04,
-      "spread": 1.08,
+      "buy": 140.3,
+      "sell": 143.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-15",
-      "buy": 104.37,
-      "sell": 105.47,
-      "spread": 1.1,
+      "buy": 141,
+      "sell": 144,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-16",
-      "buy": 104.69,
-      "sell": 105.8,
-      "spread": 1.11,
+      "buy": 141,
+      "sell": 144,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-17",
-      "buy": 105.03,
-      "sell": 106.16,
-      "spread": 1.13,
+      "buy": 141.2,
+      "sell": 144.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-18",
-      "buy": 105.36,
-      "sell": 106.5,
-      "spread": 1.14,
+      "buy": 141.3,
+      "sell": 144.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-19",
-      "buy": 105.53,
-      "sell": 106.67,
-      "spread": 1.14,
+      "buy": 139.7,
+      "sell": 142.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-20",
-      "buy": 104.86,
-      "sell": 106.01,
-      "spread": 1.15,
-      "eventId": "profit-taking"
+      "buy": 143,
+      "sell": 146,
+      "spread": 3,
+      "eventId": null
     },
     {
       "date": "2026-08-21",
-      "buy": 105.52,
-      "sell": 106.67,
-      "spread": 1.15,
+      "buy": 143.6,
+      "sell": 146.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-22",
-      "buy": 105.81,
-      "sell": 106.96,
-      "spread": 1.15,
+      "buy": 144.6,
+      "sell": 147.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-23",
-      "buy": 106.4,
-      "sell": 107.55,
-      "spread": 1.15,
+      "buy": 144.6,
+      "sell": 147.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-24",
-      "buy": 106.96,
-      "sell": 108.1,
-      "spread": 1.14,
+      "buy": 147,
+      "sell": 150,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-25",
-      "buy": 107.16,
-      "sell": 108.3,
-      "spread": 1.14,
+      "buy": 147.6,
+      "sell": 150.6,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-26",
-      "buy": 106.98,
-      "sell": 108.11,
-      "spread": 1.13,
+      "buy": 147.3,
+      "sell": 150.3,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-27",
-      "buy": 106.68,
-      "sell": 107.8,
-      "spread": 1.12,
+      "buy": 147,
+      "sell": 150,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-28",
-      "buy": 106.55,
-      "sell": 107.67,
-      "spread": 1.12,
+      "buy": 147.2,
+      "sell": 150.2,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-29",
-      "buy": 106.6,
-      "sell": 107.72,
-      "spread": 1.12,
+      "buy": 145.7,
+      "sell": 148.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-30",
-      "buy": 106.67,
-      "sell": 107.79,
-      "spread": 1.12,
+      "buy": 145.7,
+      "sell": 148.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-08-31",
-      "buy": 106.66,
-      "sell": 107.78,
-      "spread": 1.12,
+      "buy": 145.7,
+      "sell": 148.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-09-01",
-      "buy": 106.66,
-      "sell": 107.78,
-      "spread": 1.12,
+      "buy": 145.7,
+      "sell": 148.7,
+      "spread": 3,
       "eventId": null
     },
     {
       "date": "2026-09-02",
-      "buy": 106.77,
-      "sell": 107.9,
-      "spread": 1.13,
-      "eventId": null
-    },
-    {
-      "date": "2026-09-03",
-      "buy": 106.9,
-      "sell": 108.04,
-      "spread": 1.14,
+      "buy": 145.7,
+      "sell": 148.7,
+      "spread": 3,
       "eventId": null
     }
   ]

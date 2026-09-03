@@ -82,10 +82,18 @@
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
-  html { @apply font-sans; }
-  body { @apply bg-background text-foreground; }
-  button { cursor: pointer; }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button {
+    cursor: pointer;
+  }
 }
 
 @layer components {
@@ -93,17 +101,41 @@
     @apply relative min-h-44 overflow-hidden rounded-[22px] border border-border bg-card p-5 shadow-[0_12px_40px_rgba(28,46,40,.045)] sm:p-6;
   }
   .metric-card--gold {
-    background: radial-gradient(circle at 100% 0%, rgb(220 177 80 / 19%), transparent 42%), var(--card);
+    background:
+      radial-gradient(
+        circle at 100% 0%,
+        rgb(220 177 80 / 19%),
+        transparent 42%
+      ),
+      var(--card);
   }
   .metric-card--signal {
     background: linear-gradient(145deg, #edf4ed, #f9f7ef);
   }
-  .metric-label { @apply text-xs font-medium text-muted-foreground; }
-  .metric-value { @apply mt-7 font-heading text-[2.35rem] font-semibold leading-none tracking-[-0.055em]; }
-  .metric-unit { @apply mt-2 text-[11px] text-muted-foreground; }
-  .status-badge { @apply inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground; }
-  .status-badge svg { @apply size-3; }
-  .status-badge--up { @apply bg-emerald-50 text-emerald-700; }
+  .metric-label {
+    @apply text-xs font-medium text-muted-foreground;
+  }
+  .metric-value {
+    @apply mt-7 font-heading text-[2.35rem] font-semibold leading-none tracking-[-0.055em];
+  }
+  .metric-unit {
+    @apply mt-2 text-[11px] text-muted-foreground;
+  }
+  .status-badge {
+    @apply inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground;
+  }
+  .status-badge svg {
+    @apply size-3;
+  }
+  .status-badge--up {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .status-badge--down {
+    @apply bg-red-50 text-red-700;
+  }
 }
 
-::selection { background: #ddc27f; color: #173f36; }
+::selection {
+  background: #ddc27f;
+  color: #173f36;
+}
