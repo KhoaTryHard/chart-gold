@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -14,6 +14,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   ExternalLink,
+  Gem,
   Info,
   Landmark,
   LoaderCircle,
@@ -31,7 +32,23 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from '@/components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import fallbackDataset from '@/lib/sjc-data.json';
+import {
+  DEFAULT_SJC_PRODUCT_ID,
+  getSjcProduct,
+  SJC_PRODUCTS,
+  type SjcProduct,
+  type SjcProductId,
+} from '@/lib/sjc-products';
 
 type Range = '7N' | '1T' | '1N';
 type DataMode = 'connecting' | 'live' | 'delayed' | 'fallback';
@@ -44,6 +61,7 @@ type PricePoint = {
 };
 type MarketResponse = {
   mode: Exclude<DataMode, 'connecting'>;
+  product: SjcProduct;
   records: PricePoint[];
   observedAt: string;
   source: { provider: string; url: string | null; official: boolean };
@@ -60,12 +78,20 @@ const ranges: { value: Range; label: string; days: number }[] = [
   { value: '1T', label: '1 tháng', days: 30 },
   { value: '1N', label: '1 năm', days: 365 },
 ];
+const productGroups = [...new Set(SJC_PRODUCTS.map((item) => item.group))];
 
 const fallbackRecords = fallbackDataset.records as PricePoint[];
 const compactPrice = (value: number) => `${value.toFixed(1)} tr`;
 
 export default function Home() {
   const [range, setRange] = useState<Range>('1T');
+  const [productId, setProductId] = useState<SjcProductId>(
+    DEFAULT_SJC_PRODUCT_ID,
+  );
+  const [product, setProduct] = useState<SjcProduct>(
+    getSjcProduct(DEFAULT_SJC_PRODUCT_ID),
+  );
+  const activeProductId = useRef<SjcProductId>(DEFAULT_SJC_PRODUCT_ID);
   const [records, setRecords] = useState<PricePoint[]>(fallbackRecords);
   const [mode, setMode] = useState<DataMode>('connecting');
   const [observedAt, setObservedAt] = useState(
@@ -82,38 +108,46 @@ export default function Home() {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const refreshPrices = useCallback(async (manual = false) => {
-    if (manual) setIsRefreshing(true);
-    try {
-      const response = await fetch('/api/sjc', {
-        cache: 'no-store',
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) throw new Error('Không thể tải bảng giá');
-      const payload = (await response.json()) as MarketResponse;
-      if (!Array.isArray(payload.records) || payload.records.length === 0) {
-        throw new Error('Bảng giá không hợp lệ');
+  const refreshPrices = useCallback(
+    async (requestedProductId: SjcProductId, manual = false) => {
+      if (manual) setIsRefreshing(true);
+      try {
+        const query = new URLSearchParams({ product: requestedProductId });
+        const response = await fetch(`/api/sjc?${query}`, {
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) throw new Error('Không thể tải bảng giá');
+        const payload = (await response.json()) as MarketResponse;
+        if (!Array.isArray(payload.records) || payload.records.length === 0) {
+          throw new Error('Bảng giá không hợp lệ');
+        }
+        setRecords(payload.records);
+        setProduct(payload.product);
+        activeProductId.current = payload.product.id;
+        setMode(payload.mode);
+        setObservedAt(payload.observedAt);
+        setSource(payload.source);
+        setHistorySource(payload.historySource);
+      } catch {
+        setMode('fallback');
+        setProductId(activeProductId.current);
+      } finally {
+        if (manual) setIsRefreshing(false);
       }
-      setRecords(payload.records);
-      setMode(payload.mode);
-      setObservedAt(payload.observedAt);
-      setSource(payload.source);
-      setHistorySource(payload.historySource);
-    } catch {
-      setMode('fallback');
-    } finally {
-      if (manual) setIsRefreshing(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
-    void refreshPrices();
+    setMode('connecting');
+    void refreshPrices(productId);
     const timer = window.setInterval(
-      () => void refreshPrices(),
+      () => void refreshPrices(productId),
       4 * 60 * 1_000,
     );
     return () => window.clearInterval(timer);
-  }, [refreshPrices]);
+  }, [productId, refreshPrices]);
 
   const selectedRange =
     ranges.find((item) => item.value === range) ?? ranges[1];
@@ -188,7 +222,7 @@ export default function Home() {
           <Button
             variant="outline"
             className="rounded-full px-3 sm:px-4"
-            onClick={() => void refreshPrices(true)}
+            onClick={() => void refreshPrices(productId, true)}
             disabled={isRefreshing}
           >
             {isRefreshing ? (
@@ -204,37 +238,72 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
-        <section className="mb-7 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <section className="mb-7 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent-foreground">
               <Sparkles className="size-3.5 text-[var(--gold)]" />
               Góc nhìn thị trường
             </div>
             <h1 className="max-w-3xl font-heading text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[1.02] tracking-[-0.055em]">
-              Giá vàng SJC,
+              Giá {product.shortLabel.toLowerCase()},
               <span className="text-muted-foreground"> thấy cả xu hướng.</span>
             </h1>
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="size-3.5" />
+              Bảng giá niêm yết theo lượng; quy cách cùng nhóm dùng chung chuỗi
+              giá.
+            </p>
           </div>
-          <div
-            className="flex w-fit rounded-xl border border-border bg-muted/55 p-1"
-            role="group"
-            aria-label="Khoảng thời gian"
-          >
-            {ranges.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setRange(item.value)}
-                aria-pressed={range === item.value}
-                className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4 ${
-                  range === item.value
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:flex-col lg:items-end xl:flex-row">
+            <Select
+              value={productId}
+              onValueChange={(value) => {
+                if (value) setProductId(value as SjcProductId);
+              }}
+            >
+              <SelectTrigger
+                className="h-10 w-[min(100%,320px)] rounded-xl border-border bg-card px-3 shadow-sm sm:w-[320px]"
+                aria-label="Chọn loại vàng SJC"
               >
-                {item.label}
-              </button>
-            ))}
+                <Gem className="size-4 text-[var(--gold)]" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className="min-w-[320px]">
+                {productGroups.map((group) => (
+                  <SelectGroup key={group}>
+                    <SelectLabel>{group}</SelectLabel>
+                    {SJC_PRODUCTS.filter((item) => item.group === group).map(
+                      (item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.label}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+            <div
+              className="flex w-fit rounded-xl border border-border bg-muted/55 p-1"
+              role="group"
+              aria-label="Khoảng thời gian"
+            >
+              {ranges.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => setRange(item.value)}
+                  aria-pressed={range === item.value}
+                  className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4 ${
+                    range === item.value
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -252,7 +321,7 @@ export default function Home() {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <article className="metric-card metric-card--gold sm:col-span-2 xl:col-span-1">
             <div className="flex items-start justify-between">
-              <p className="metric-label">SJC bán ra</p>
+              <p className="metric-label">{product.shortLabel} · bán ra</p>
               <ChangeBadge value={daySellChange} />
             </div>
             <p className="metric-value">{latestPoint.sell.toFixed(1)}</p>
@@ -260,7 +329,7 @@ export default function Home() {
           </article>
           <article className="metric-card">
             <div className="flex items-start justify-between">
-              <p className="metric-label">SJC mua vào</p>
+              <p className="metric-label">{product.shortLabel} · mua vào</p>
               <ChangeBadge value={dayBuyChange} />
             </div>
             <p className="metric-value">{latestPoint.buy.toFixed(1)}</p>
@@ -298,7 +367,7 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-                    Diễn biến giá SJC
+                    Diễn biến {product.shortLabel.toLowerCase()}
                   </h2>
                   <Info className="size-3.5 text-muted-foreground" />
                 </div>
@@ -320,7 +389,7 @@ export default function Home() {
               config={chartConfig}
               className="h-[310px] w-full sm:h-[390px]"
               initialDimension={{ width: 800, height: 390 }}
-              aria-label={`Biểu đồ giá vàng SJC trong ${selectedRange.label}`}
+              aria-label={`Biểu đồ giá ${product.label} trong ${selectedRange.label}`}
             >
               <AreaChart
                 data={data}
@@ -475,8 +544,8 @@ export default function Home() {
             </div>
             <p className="mt-8 flex items-start gap-2 text-[10px] leading-4 text-white/40">
               <Info className="mt-0.5 size-3 shrink-0" />
-              Dữ liệu tham khảo, không phải khuyến nghị đầu tư. Hãy đối chiếu
-              bảng niêm yết trước giao dịch.
+              Giá niêm yết theo lượng; sản phẩm thực tế có thể thêm phí gia
+              công. Hãy đối chiếu bảng SJC trước giao dịch.
             </p>
           </aside>
         </section>
@@ -484,8 +553,8 @@ export default function Home() {
         <footer className="mt-5 flex flex-col gap-2 border-t border-border/70 pt-5 text-[11px] leading-5 text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-start gap-1.5">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-700" />
-            Giá hiện tại: {source.provider}. Lịch sử: {historySource.provider}.
-            Tự động làm mới mỗi 4 phút.
+            {product.label} · Giá hiện tại: {source.provider}. Lịch sử:{' '}
+            {historySource.provider}. Tự động làm mới mỗi 4 phút.
           </p>
           {source.url ? (
             <a
