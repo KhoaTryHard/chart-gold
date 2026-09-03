@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    'https://kim-tuyen-sjc.abhishek976189057.chatgpt.site',
+  ),
   title: 'Kim Tuyến — Biểu đồ giá vàng SJC',
   description:
     'Theo dõi giá vàng SJC theo ngày, tháng và năm với góc nhìn trực quan dành cho nhà đầu tư.',
