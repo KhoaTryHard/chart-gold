@@ -253,6 +253,55 @@ function mapGeminiUsage(value: unknown): AnalysisDoneUsage | null {
     : null;
 }
 
+function collectGeminiErrorDetails(
+  value: unknown,
+  depth = 0,
+  seen = new Set<object>(),
+): string[] {
+  if (depth > 3 || value === null || value === undefined) return [];
+  if (typeof value === 'string' || typeof value === 'number') {
+    return [String(value)];
+  }
+  if (typeof value !== 'object' || seen.has(value)) return [];
+  seen.add(value);
+
+  const record = value as Record<string, unknown>;
+  const details: string[] = [];
+  for (const key of [
+    'name',
+    'message',
+    'code',
+    'status',
+    'statusCode',
+    'statusText',
+    'reason',
+    'body',
+    'error',
+    'details',
+    'cause',
+  ]) {
+    const nested = record[key];
+    if (typeof nested === 'string' || typeof nested === 'number') {
+      details.push(String(nested));
+    } else {
+      details.push(...collectGeminiErrorDetails(nested, depth + 1, seen));
+    }
+  }
+  return details;
+}
+
+function isGeminiGroundingQuotaError(error: unknown) {
+  const details = collectGeminiErrorDetails(error).join(' ').toLowerCase();
+  const hasRateLimitStatus = /\b429\b/.test(details);
+  const hasResourceExhaustedCode = /\bresource[_\s-]*exhausted\b/.test(details);
+
+  // This helper is only called after the Google Search grounded request. The
+  // Gemini API commonly returns a generic quota message without identifying
+  // grounding in the error body, so the HTTP/status signal is the reliable
+  // discriminator here. Other failures must continue to surface unchanged.
+  return hasRateLimitStatus || hasResourceExhaustedCode;
+}
+
 export class GeminiAnalysisProvider implements AnalysisProvider {
   readonly name = 'gemini';
 
@@ -272,27 +321,61 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
       shouldUseDeepModel(request.question) &&
       selectedModel.startsWith('gemini-3.');
     const client = new GoogleGenAI({ apiKey });
-    const stream = await client.models.generateContentStream({
-      model: selectedModel,
-      contents: buildGeminiContents(request.messages, request.question),
-      config: {
-        systemInstruction: formatInstructions(request, selectedModel),
-        tools: [{ googleSearch: {} }],
-        maxOutputTokens: 900,
-        ...(useDeepReasoning
-          ? { thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } }
-          : {}),
-        abortSignal: signal,
-      },
-    });
+    const contents = buildGeminiContents(request.messages, request.question);
+    const baseConfig = {
+      systemInstruction: formatInstructions(request, selectedModel),
+      maxOutputTokens: 900,
+      ...(useDeepReasoning
+        ? { thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } }
+        : {}),
+      abortSignal: signal,
+    };
+    const openStream = (withGrounding: boolean) =>
+      client.models.generateContentStream({
+        model: selectedModel,
+        contents,
+        config: {
+          ...baseConfig,
+          ...(withGrounding ? { tools: [{ googleSearch: {} }] } : {}),
+        },
+      });
+
+    // The SDK may reject either while creating the stream or on its first
+    // iterator read. Open and read the first chunk before yielding anything
+    // so a grounding-only quota failure can be retried without duplicate SSE
+    // deltas. Once that first read succeeds, later failures are surfaced as-is.
+    const openStreamWithFirstChunk = async (withGrounding: boolean) => {
+      const stream = await openStream(withGrounding);
+      const iterator = stream[Symbol.asyncIterator]();
+      const first = await iterator.next();
+      return { iterator, first };
+    };
+    const openGroundedStream = async () => {
+      try {
+        return await openStreamWithFirstChunk(true);
+      } catch (error) {
+        if (!signal.aborted && isGeminiGroundingQuotaError(error)) {
+          return null;
+        }
+        throw error;
+      }
+    };
+
+    let active = await openGroundedStream();
+    if (!active) {
+      active = await openStreamWithFirstChunk(false);
+    }
 
     const sources = new Map<string, AnalysisSource>();
     let usage: AnalysisDoneUsage | null = null;
-    for await (const chunk of stream) {
+    let current = active.first;
+    while (!current.done) {
+      const chunk = current.value;
       collectGeminiSources(chunk, sources);
       usage = mapGeminiUsage(chunk.usageMetadata) ?? usage;
       const text = chunk.text;
       if (text) yield { type: 'delta', delta: text };
+      current = await active.iterator.next();
     }
     if (sources.size > 0) {
       yield { type: 'sources', sources: [...sources.values()].slice(0, 12) };
