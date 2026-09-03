@@ -390,30 +390,146 @@ function shouldUseDeepModel(question: string) {
 
 export class HermesAnalysisProvider implements AnalysisProvider {
   readonly name = 'hermes';
-  private readonly configured: boolean;
 
-  constructor() {
-    this.configured = Boolean(
-      process.env.HERMES_BASE_URL &&
-      process.env.HERMES_API_KEY &&
-      process.env.HERMES_MODEL,
-    );
+  /**
+   * Hermes' API server implements the OpenAI chat-completions contract. The
+   * OpenAI SDK accepts a base URL and appends `/chat/completions`, so normalize
+   * the configured gateway to the `/v1` root here. Keeping this function
+   * exported also makes the URL contract easy to test without making a
+   * network request.
+   */
+  static normalizeBaseUrl(value: string) {
+    return normalizeHermesBaseUrl(value);
   }
 
   async *analyze(
-    _request: AnalysisRequest,
-    _signal: AbortSignal,
+    request: AnalysisRequest,
+    signal: AbortSignal,
   ): AsyncGenerator<AnalysisEvent> {
-    yield* [] as AnalysisEvent[];
-    if (!this.configured) {
+    const baseUrl = process.env.HERMES_BASE_URL?.trim();
+    const apiKey = process.env.HERMES_API_KEY?.trim();
+    const model = process.env.HERMES_MODEL?.trim();
+    if (!baseUrl || !apiKey || !model) {
       throw new Error(
         'Hermes provider requires HERMES_BASE_URL, HERMES_API_KEY, and HERMES_MODEL.',
       );
     }
+
+    const client = new OpenAI({
+      apiKey,
+      baseURL: normalizeHermesBaseUrl(baseUrl),
+    });
+    const messages = [
+      { role: 'system' as const, content: formatInstructions(request, model) },
+      ...buildAnalysisInput(request.messages, request.question),
+    ];
+    const stream = await client.chat.completions.create(
+      {
+        model,
+        messages,
+        // Hermes' OpenAI-compatible server accepts the established
+        // `max_tokens` chat-completions field. The OpenAI SDK marks it
+        // deprecated only for its own newer models.
+        // oxlint-disable-next-line typescript/no-deprecated
+        max_tokens: 900,
+        stream: true,
+        // Hermes follows the OpenAI streaming shape. Gateways that support
+        // this option include token usage on the final, empty chunk.
+        stream_options: { include_usage: true },
+      },
+      { signal },
+    );
+
+    const sources = new Map<string, AnalysisSource>();
+    let usage: AnalysisDoneUsage | null = null;
+    let requestId: string | undefined;
+    for await (const chunk of stream) {
+      requestId ??= typeof chunk.id === 'string' ? chunk.id : undefined;
+      collectSources(chunk, sources);
+      usage = mapHermesUsage(chunk.usage) ?? usage;
+
+      for (const choice of chunk.choices ?? []) {
+        const text = extractChatDeltaText(choice.delta?.content);
+        if (text) yield { type: 'delta', delta: text };
+      }
+    }
+
+    if (sources.size > 0) {
+      yield { type: 'sources', sources: [...sources.values()].slice(0, 12) };
+    }
+    yield { type: 'done', model, usage, requestId };
+  }
+}
+
+/** Normalize a Hermes gateway URL to the OpenAI-compatible `/v1` root. */
+export function normalizeHermesBaseUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error('HERMES_BASE_URL must not be empty.');
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error('HERMES_BASE_URL must be a valid HTTP(S) URL.');
+  }
+  const hostname = url.hostname.toLowerCase();
+  const isLoopback =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '[::1]';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
     throw new Error(
-      'Hermes provider is not available until its gateway contract is configured; Gemini remains the default.',
+      'HERMES_BASE_URL must use HTTPS; HTTP is allowed only for localhost.',
     );
   }
+  if (url.username || url.password) {
+    throw new Error('HERMES_BASE_URL must not include credentials.');
+  }
+  if (url.search || url.hash) {
+    throw new Error('HERMES_BASE_URL must not include a query string or hash.');
+  }
+
+  const pathname = url.pathname.replace(/\/+$/, '');
+  url.pathname = pathname.toLowerCase().endsWith('/v1')
+    ? pathname || '/v1'
+    : `${pathname || ''}/v1`;
+  return url.toString().replace(/\/$/, '');
+}
+
+function extractChatDeltaText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(extractChatDeltaText).join('');
+  if (!value || typeof value !== 'object') return '';
+
+  const candidate = value as { text?: unknown; content?: unknown };
+  if (typeof candidate.text === 'string') return candidate.text;
+  return extractChatDeltaText(candidate.content);
+}
+
+function mapHermesUsage(value: unknown): AnalysisDoneUsage | null {
+  if (!value || typeof value !== 'object') return null;
+  const usage = value as {
+    prompt_tokens?: unknown;
+    completion_tokens?: unknown;
+    total_tokens?: unknown;
+    input_tokens?: unknown;
+    output_tokens?: unknown;
+  };
+  const asNumber = (tokenCount: unknown) =>
+    typeof tokenCount === 'number' && Number.isFinite(tokenCount)
+      ? tokenCount
+      : null;
+  const mapped = {
+    inputTokens: asNumber(usage.prompt_tokens ?? usage.input_tokens),
+    outputTokens: asNumber(usage.completion_tokens ?? usage.output_tokens),
+    totalTokens: asNumber(usage.total_tokens),
+  };
+  return mapped.inputTokens !== null ||
+    mapped.outputTokens !== null ||
+    mapped.totalTokens !== null
+    ? mapped
+    : null;
 }
 
 export function createAnalysisProvider(): AnalysisProvider {
