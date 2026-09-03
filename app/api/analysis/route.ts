@@ -107,7 +107,7 @@ export async function POST(request: Request) {
 
   const requestId = globalThis.crypto.randomUUID();
   const startedAt = Date.now();
-  let providerName = (process.env.AI_PROVIDER ?? 'openai').trim().toLowerCase();
+  let providerName = (process.env.AI_PROVIDER ?? 'gemini').trim().toLowerCase();
   let selectedModel: string | null = null;
   let usage: AnalysisDoneUsage | null = null;
   let sourceCount = 0;

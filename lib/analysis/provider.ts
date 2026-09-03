@@ -1,19 +1,27 @@
 import 'server-only';
 
+import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 
 import type { AnalysisMetrics, AnalysisRange } from '@/lib/analysis/metrics';
 import type { PricePoint } from '@/lib/server/sjc';
 import type { SjcProduct } from '@/lib/sjc-products';
 import {
+  DEEP_ANALYSIS_MODEL,
+  buildGeminiContents,
   buildAnalysisInput,
   routeAnalysisModel,
+  routeOpenAIModel,
 } from '@/lib/analysis/model-routing';
 
 export {
   DEFAULT_ANALYSIS_MODEL,
   DEEP_ANALYSIS_MODEL,
+  OPENAI_DEFAULT_ANALYSIS_MODEL,
+  OPENAI_DEEP_ANALYSIS_MODEL,
+  buildGeminiContents,
   routeAnalysisModel,
+  routeOpenAIModel,
 } from '@/lib/analysis/model-routing';
 
 export type AnalysisSource = {
@@ -140,7 +148,7 @@ export class OpenAIAnalysisProvider implements AnalysisProvider {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured.');
 
-    const model = routeAnalysisModel(request.question);
+    const model = routeOpenAIModel(request.question);
     const client = new OpenAI({ apiKey });
     const input = buildAnalysisInput(request.messages, request.question);
     const stream = await client.responses.create(
@@ -194,6 +202,104 @@ export class OpenAIAnalysisProvider implements AnalysisProvider {
   }
 }
 
+function collectGeminiSources(
+  value: unknown,
+  sources: Map<string, AnalysisSource>,
+) {
+  if (!value || typeof value !== 'object') return;
+  const candidate = value as {
+    candidates?: Array<{
+      groundingMetadata?: {
+        groundingChunks?: Array<{
+          web?: { uri?: string; title?: string };
+        }>;
+      };
+    }>;
+  };
+  for (const responseCandidate of candidate.candidates ?? []) {
+    for (const chunk of responseCandidate.groundingMetadata?.groundingChunks ?? []) {
+      const web = chunk.web;
+      if (!web?.uri) continue;
+      const source = normalizeSource({
+        type: 'url',
+        url: web.uri,
+        title: web.title,
+      });
+      if (source) sources.set(source.url, source);
+    }
+  }
+}
+
+function mapGeminiUsage(value: unknown): AnalysisDoneUsage | null {
+  if (!value || typeof value !== 'object') return null;
+  const usage = value as {
+    promptTokenCount?: unknown;
+    candidatesTokenCount?: unknown;
+    totalTokenCount?: unknown;
+  };
+  const asNumber = (tokenCount: unknown) =>
+    typeof tokenCount === 'number' && Number.isFinite(tokenCount)
+      ? tokenCount
+      : null;
+  const mapped = {
+    inputTokens: asNumber(usage.promptTokenCount),
+    outputTokens: asNumber(usage.candidatesTokenCount),
+    totalTokens: asNumber(usage.totalTokenCount),
+  };
+  return mapped.inputTokens !== null ||
+    mapped.outputTokens !== null ||
+    mapped.totalTokens !== null
+    ? mapped
+    : null;
+}
+
+export class GeminiAnalysisProvider implements AnalysisProvider {
+  readonly name = 'gemini';
+
+  async *analyze(
+    request: AnalysisRequest,
+    signal: AbortSignal,
+  ): AsyncGenerator<AnalysisEvent> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Gemini provider requires GEMINI_API_KEY.');
+
+    const model = routeAnalysisModel(request.question);
+    const configuredModel = shouldUseDeepModel(request.question)
+      ? process.env.GEMINI_DEEP_MODEL?.trim()
+      : process.env.GEMINI_MODEL?.trim();
+    const selectedModel = configuredModel || model;
+    const client = new GoogleGenAI({ apiKey });
+    const stream = await client.models.generateContentStream({
+      model: selectedModel,
+      contents: buildGeminiContents(request.messages, request.question),
+      config: {
+        systemInstruction: formatInstructions(request, selectedModel),
+        tools: [{ googleSearch: {} }],
+        maxOutputTokens: 900,
+        temperature: 0.2,
+        abortSignal: signal,
+      },
+    });
+
+    const sources = new Map<string, AnalysisSource>();
+    let usage: AnalysisDoneUsage | null = null;
+    for await (const chunk of stream) {
+      collectGeminiSources(chunk, sources);
+      usage = mapGeminiUsage(chunk.usageMetadata) ?? usage;
+      const text = chunk.text;
+      if (text) yield { type: 'delta', delta: text };
+    }
+    if (sources.size > 0) {
+      yield { type: 'sources', sources: [...sources.values()].slice(0, 12) };
+    }
+    yield { type: 'done', model: selectedModel, usage };
+  }
+}
+
+function shouldUseDeepModel(question: string) {
+  return routeAnalysisModel(question) === DEEP_ANALYSIS_MODEL;
+}
+
 export class HermesAnalysisProvider implements AnalysisProvider {
   readonly name = 'hermes';
   private readonly configured: boolean;
@@ -217,13 +323,14 @@ export class HermesAnalysisProvider implements AnalysisProvider {
       );
     }
     throw new Error(
-      'Hermes provider is not available until its gateway contract is configured; OpenAI remains the default.',
+      'Hermes provider is not available until its gateway contract is configured; Gemini remains the default.',
     );
   }
 }
 
 export function createAnalysisProvider(): AnalysisProvider {
-  const provider = (process.env.AI_PROVIDER ?? 'openai').trim().toLowerCase();
+  const provider = (process.env.AI_PROVIDER ?? 'gemini').trim().toLowerCase();
+  if (provider === 'gemini') return new GeminiAnalysisProvider();
   if (provider === 'openai') return new OpenAIAnalysisProvider();
   if (provider === 'hermes') return new HermesAnalysisProvider();
   throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
