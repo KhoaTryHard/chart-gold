@@ -1,5 +1,3 @@
-import { env } from 'cloudflare:workers';
-
 import fallbackDataset from '@/lib/sjc-data.json';
 import {
   getSjcProduct,
@@ -21,12 +19,6 @@ type LiveQuote = {
   observedAt: string;
   provider: string;
   providerUrl: string;
-};
-
-type StoredQuote = PricePoint & {
-  observedAt: string;
-  provider: string;
-  sourceUrl: string;
 };
 
 const OFFICIAL_SJC_URL = 'https://sjc.com.vn/xml/tygiavang.xml';
@@ -187,108 +179,6 @@ async function fetchHistoricalCsv(): Promise<PricePoint[]> {
   });
 }
 
-function database() {
-  return (env as unknown as { DB?: D1Database }).DB;
-}
-
-async function ensureSchema(db: D1Database) {
-  await db.batch([
-    db.prepare(
-      `CREATE TABLE IF NOT EXISTS gold_product_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        series_id TEXT NOT NULL,
-        observed_at TEXT NOT NULL,
-        observed_date TEXT NOT NULL,
-        buy REAL NOT NULL,
-        sell REAL NOT NULL,
-        provider TEXT NOT NULL,
-        source_url TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )`,
-    ),
-    db.prepare(
-      `CREATE UNIQUE INDEX IF NOT EXISTS uq_gold_product_snapshots_series_observed
-       ON gold_product_snapshots(series_id, observed_at)`,
-    ),
-    db.prepare(
-      `CREATE INDEX IF NOT EXISTS idx_gold_product_snapshots_series_date
-       ON gold_product_snapshots(series_id, observed_date)`,
-    ),
-  ]);
-}
-
-async function persistQuote(product: SjcProduct, quote: LiveQuote) {
-  const db = database();
-  if (!db) return;
-  await ensureSchema(db);
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO gold_product_snapshots
-        (series_id, observed_at, observed_date, buy, sell, provider, source_url, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      product.seriesId,
-      quote.observedAt,
-      vietnamDate(new Date(quote.observedAt)),
-      quote.buy,
-      quote.sell,
-      quote.provider,
-      quote.providerUrl,
-      new Date().toISOString(),
-    )
-    .run();
-}
-
-async function fetchStoredHistory(product: SjcProduct): Promise<{
-  records: PricePoint[];
-  latest: StoredQuote | null;
-}> {
-  const db = database();
-  if (!db) return { records: [], latest: null };
-  await ensureSchema(db);
-
-  const result = await db
-    .prepare(
-      `SELECT observed_date, buy, sell, observed_at, provider, source_url
-       FROM gold_product_snapshots AS snapshot
-       WHERE series_id = ? AND observed_at = (
-         SELECT MAX(newer.observed_at)
-         FROM gold_product_snapshots AS newer
-         WHERE newer.series_id = snapshot.series_id
-           AND newer.observed_date = snapshot.observed_date
-       )
-       ORDER BY observed_date DESC
-       LIMIT 365`,
-    )
-    .bind(product.seriesId)
-    .all<{
-      observed_date: string;
-      buy: number;
-      sell: number;
-      observed_at: string;
-      provider: string;
-      source_url: string;
-    }>();
-
-  const rows = result.results ?? [];
-  const records = rows
-    .map((row) => toPoint(row.observed_date, row.buy, row.sell))
-    .reverse();
-  const newest = rows[0];
-  return {
-    records,
-    latest: newest
-      ? {
-          ...toPoint(newest.observed_date, newest.buy, newest.sell),
-          observedAt: newest.observed_at,
-          provider: newest.provider,
-          sourceUrl: newest.source_url,
-        }
-      : null,
-  };
-}
-
 export async function GET(request: Request) {
   const product = getSjcProduct(
     new URL(request.url).searchParams.get('product'),
@@ -317,24 +207,6 @@ export async function GET(request: Request) {
   const barHistory =
     barHistoryResult.status === 'fulfilled' ? barHistoryResult.value : [];
 
-  if (liveQuote) {
-    try {
-      await persistQuote(product, liveQuote);
-    } catch {
-      // Remote data remains useful if durable caching is temporarily unavailable.
-    }
-  }
-
-  let stored: Awaited<ReturnType<typeof fetchStoredHistory>> = {
-    records: [],
-    latest: null,
-  };
-  try {
-    stored = await fetchStoredHistory(product);
-  } catch {
-    // The remote series remains available if D1 is temporarily unavailable.
-  }
-
   const localBarFallback = fallbackDataset.records as PricePoint[];
   const merged = new Map<string, PricePoint>();
   const baseHistory =
@@ -345,7 +217,6 @@ export async function GET(request: Request) {
         : [];
   for (const point of baseHistory) merged.set(point.date, point);
   for (const point of productHistory) merged.set(point.date, point);
-  for (const point of stored.records) merged.set(point.date, point);
   if (liveQuote) {
     const date = vietnamDate(new Date(liveQuote.observedAt));
     merged.set(date, toPoint(date, liveQuote.buy, liveQuote.sell));
@@ -355,20 +226,10 @@ export async function GET(request: Request) {
     .sort((left, right) => left.date.localeCompare(right.date))
     .slice(-365);
   const latest = records.at(-1) ?? null;
-  const lastKnownQuote =
-    liveQuote ??
-    (stored.latest
-      ? {
-          buy: stored.latest.buy,
-          sell: stored.latest.sell,
-          observedAt: stored.latest.observedAt,
-          provider: stored.latest.provider,
-          providerUrl: stored.latest.sourceUrl,
-        }
-      : null);
+  const lastKnownQuote = liveQuote;
   const mode = liveQuote
     ? 'live'
-    : stored.latest || productHistory.length || barHistory.length
+    : productHistory.length || barHistory.length
       ? 'delayed'
       : 'fallback';
 
@@ -405,9 +266,7 @@ export async function GET(request: Request) {
             ? 'Vàng.Today'
             : barHistory.length > 0
               ? 'SJC-price dataset'
-              : stored.records.length > 0
-                ? 'Snapshot đã lưu'
-                : 'Bản dự phòng cục bộ',
+              : 'Bản dự phòng cục bộ',
         url:
           productHistory.length > 0
             ? 'https://www.vang.today/vi/api'
