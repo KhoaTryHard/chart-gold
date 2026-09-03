@@ -1,7 +1,8 @@
-// Gemini is the default provider. These stable model IDs support Google Search
-// grounding through the official @google/genai SDK.
-export const DEFAULT_ANALYSIS_MODEL = 'gemini-2.5-flash';
-export const DEEP_ANALYSIS_MODEL = 'gemini-2.5-pro';
+// Gemini is the default provider. These Gemini 3 model IDs support Google
+// Search grounding through the official @google/genai SDK. Gemini 3 models do
+// not accept the legacy sampling controls (temperature/top-p/top-k).
+export const DEFAULT_ANALYSIS_MODEL = 'gemini-3.6-flash';
+export const DEEP_ANALYSIS_MODEL = 'gemini-3.5-flash';
 
 // OpenAI remains available as an explicitly selected, optional provider. Keep
 // its model IDs separate so changing the default provider cannot send Gemini

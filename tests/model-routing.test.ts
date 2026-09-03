@@ -32,9 +32,9 @@ describe('analysis model routing', () => {
     );
   });
 
-  it('uses Gemini stable models by default and keeps OpenAI routing isolated', () => {
-    expect(DEFAULT_ANALYSIS_MODEL).toBe('gemini-2.5-flash');
-    expect(DEEP_ANALYSIS_MODEL).toBe('gemini-2.5-pro');
+  it('uses Gemini 3 models by default and keeps OpenAI routing isolated', () => {
+    expect(DEFAULT_ANALYSIS_MODEL).toBe('gemini-3.6-flash');
+    expect(DEEP_ANALYSIS_MODEL).toBe('gemini-3.5-flash');
     expect(routeOpenAIModel('Giá đang có xu hướng gì?')).toBe(
       OPENAI_DEFAULT_ANALYSIS_MODEL,
     );

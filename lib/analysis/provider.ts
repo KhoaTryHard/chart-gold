@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import OpenAI from 'openai';
 
 import type { AnalysisMetrics, AnalysisRange } from '@/lib/analysis/metrics';
@@ -268,6 +268,9 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
       ? process.env.GEMINI_DEEP_MODEL?.trim()
       : process.env.GEMINI_MODEL?.trim();
     const selectedModel = configuredModel || model;
+    const useDeepReasoning =
+      shouldUseDeepModel(request.question) &&
+      selectedModel.startsWith('gemini-3.');
     const client = new GoogleGenAI({ apiKey });
     const stream = await client.models.generateContentStream({
       model: selectedModel,
@@ -276,7 +279,9 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
         systemInstruction: formatInstructions(request, selectedModel),
         tools: [{ googleSearch: {} }],
         maxOutputTokens: 900,
-        temperature: 0.2,
+        ...(useDeepReasoning
+          ? { thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } }
+          : {}),
         abortSignal: signal,
       },
     });
