@@ -1,0 +1,109 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --radius-sm: calc(var(--radius) * 0.65);
+  --radius-md: calc(var(--radius) * 0.82);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.35);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --background: #f6f3eb;
+  --foreground: #17241f;
+  --card: #fffdf8;
+  --card-foreground: #17241f;
+  --popover: #fffdf8;
+  --popover-foreground: #17241f;
+  --primary: #173f36;
+  --primary-foreground: #f8f6ef;
+  --secondary: #eee8d9;
+  --secondary-foreground: #263c34;
+  --muted: #eeeae0;
+  --muted-foreground: #69756f;
+  --accent: #f3ead1;
+  --accent-foreground: #80611e;
+  --destructive: #b64238;
+  --border: #ded9cb;
+  --input: #d7d1c1;
+  --ring: #b9862d;
+  --chart-1: #b7791f;
+  --chart-2: #173f36;
+  --gold: #b7791f;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #101a17;
+  --foreground: #f5f1e7;
+  --card: #17241f;
+  --card-foreground: #f5f1e7;
+  --popover: #17241f;
+  --popover-foreground: #f5f1e7;
+  --primary: #d9bc73;
+  --primary-foreground: #14201c;
+  --secondary: #26342f;
+  --secondary-foreground: #f5f1e7;
+  --muted: #26342f;
+  --muted-foreground: #a8b2ad;
+  --accent: #3c321f;
+  --accent-foreground: #e4c87e;
+  --destructive: #e4695e;
+  --border: rgb(255 255 255 / 11%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #d9bc73;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { @apply font-sans; }
+  body { @apply bg-background text-foreground; }
+  button { cursor: pointer; }
+}
+
+@layer components {
+  .metric-card {
+    @apply relative min-h-44 overflow-hidden rounded-[22px] border border-border bg-card p-5 shadow-[0_12px_40px_rgba(28,46,40,.045)] sm:p-6;
+  }
+  .metric-card--gold {
+    background: radial-gradient(circle at 100% 0%, rgb(220 177 80 / 19%), transparent 42%), var(--card);
+  }
+  .metric-card--signal {
+    background: linear-gradient(145deg, #edf4ed, #f9f7ef);
+  }
+  .metric-label { @apply text-xs font-medium text-muted-foreground; }
+  .metric-value { @apply mt-7 font-heading text-[2.35rem] font-semibold leading-none tracking-[-0.055em]; }
+  .metric-unit { @apply mt-2 text-[11px] text-muted-foreground; }
+  .status-badge { @apply inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground; }
+  .status-badge svg { @apply size-3; }
+  .status-badge--up { @apply bg-emerald-50 text-emerald-700; }
+}
+
+::selection { background: #ddc27f; color: #173f36; }
