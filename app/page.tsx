@@ -274,7 +274,7 @@ export default function Home() {
                 Kim Tuyến
               </p>
               <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                SJC Market View
+                Vietnam Gold Market View
               </p>
             </div>
           </div>
@@ -657,7 +657,7 @@ export default function Home() {
             <p className="mt-8 flex items-start gap-2 text-[10px] leading-4 text-white/40">
               <Info className="mt-0.5 size-3 shrink-0" />
               Giá niêm yết theo lượng; sản phẩm thực tế có thể thêm phí gia
-              công. Hãy đối chiếu bảng SJC trước giao dịch.
+              công. Hãy đối chiếu bảng giá chính thức của thương hiệu trước giao dịch.
             </p>
           </aside>
         </section>

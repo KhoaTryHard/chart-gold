@@ -21,18 +21,18 @@ export const metadata: Metadata = {
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000',
   ),
-  title: 'Kim Tuyến — Biểu đồ giá vàng SJC',
+  title: 'Kim Tuyến — Biểu đồ giá vàng Việt Nam',
   description:
-    'Theo dõi giá vàng SJC theo ngày, tháng và năm với góc nhìn trực quan dành cho nhà đầu tư.',
+    'Theo dõi giá vàng các thương hiệu uy tín tại Việt Nam theo ngày, tháng và năm với góc nhìn trực quan dành cho nhà đầu tư.',
   openGraph: {
-    title: 'Kim Tuyến — Biểu đồ giá vàng SJC',
+    title: 'Kim Tuyến — Biểu đồ giá vàng Việt Nam',
     description:
       'Nhìn giá vàng, thấy cả xu hướng với dữ liệu theo ngày, tháng và năm.',
     images: [{ url: '/og.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Kim Tuyến — Biểu đồ giá vàng SJC',
+    title: 'Kim Tuyến — Biểu đồ giá vàng Việt Nam',
     description:
       'Nhìn giá vàng, thấy cả xu hướng với dữ liệu theo ngày, tháng và năm.',
     images: ['/og.png'],
