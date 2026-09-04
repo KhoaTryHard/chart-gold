@@ -8,6 +8,7 @@ import {
   getMarketCompany,
   getMarketProduct,
   getMarketProducts,
+  isMarketProductSelectable,
   MARKET_COMPANIES,
 } from '@/lib/market-sources';
 import { getMarketData } from '@/lib/server/sjc';
@@ -25,13 +26,12 @@ describe('market source registry', () => {
       'baotin',
       'vngold',
       'viettin',
+      'vgj',
       'btmc',
       'phuquy',
       'mihong',
     ]);
     expect(AGGREGATED_PRODUCTS.map((product) => product.upstreamCode)).toEqual([
-      'PQHNVM',
-      'PQHN24NTT',
       'DOHNL',
       'DOHCML',
       'DOJINHTV',
@@ -43,7 +43,9 @@ describe('market source registry', () => {
   });
 
   it('resolves a product only inside the selected company', () => {
-    expect(getMarketProduct('pnj', 'pnj-24k').upstreamCode).toBe('PQHN24NTT');
+    expect(getMarketProduct('pnj', 'pnj-ring-9999').officialMatch).toBe(
+      'Nhẫn Trơn PNJ 999.9',
+    );
     expect(getMarketProduct('doji', 'pnj-24k').companyId).toBe('doji');
     expect(
       getMarketProducts('sjc').every((product) => 'officialMatch' in product),
@@ -66,7 +68,7 @@ describe('market source registry', () => {
             {
               date: '2026-09-03',
               prices: {
-                PQHN24NTT: { buy: 145_000_000, sell: 148_000_000 },
+                DOHNL: { buy: 145_000_000, sell: 148_000_000 },
               },
             },
           ],
@@ -81,9 +83,9 @@ describe('market source registry', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const market = await getMarketData('pnj', 'pnj-24k');
-    expect(market.company.id).toBe('pnj');
-    expect(market.product.id).toBe('pnj-24k');
+    const market = await getMarketData('doji', 'doji-hanoi');
+    expect(market.company.id).toBe('doji');
+    expect(market.product.id).toBe('doji-hanoi');
     expect(market.mode).toBe('live');
     expect(market.availability).toBe('available');
     expect(market.source.provider).toBe('Vang.Today aggregator');
@@ -246,11 +248,11 @@ describe('market source registry', () => {
     // shared through the company/date cache.
     expect(fetchMock.mock.calls.length).toBe(callsAfterFirstProduct + 1);
 
-    expect(
-      getMarketProducts('btmc').some(
-        (product) => product.id === 'btmc-raw-9999',
-      ),
-    ).toBe(false);
+    const rawMaterial = getMarketProducts('btmc').find(
+      (product) => product.id === 'btmc-raw-9999',
+    );
+    expect(rawMaterial).toBeDefined();
+    expect(rawMaterial && isMarketProductSelectable(rawMaterial)).toBe(false);
   });
 
   it('keeps Mi Hồng explicit unavailable while its official domain is inactive', async () => {

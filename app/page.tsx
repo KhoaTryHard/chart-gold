@@ -52,6 +52,7 @@ import {
   getMarketCompany,
   getMarketProduct,
   getMarketProducts,
+  isMarketProductSelectable,
   MARKET_COMPANIES,
   type MarketCompanyId,
   type MarketProduct,
@@ -377,7 +378,11 @@ export default function Home() {
                     <SelectLabel>{group}</SelectLabel>
                     {currentProducts.filter((item) => item.group === group).map(
                       (item) => (
-                        <SelectItem key={item.id} value={item.id}>
+                        <SelectItem
+                          key={item.id}
+                          value={item.id}
+                          disabled={!isMarketProductSelectable(item)}
+                        >
                           {item.label}
                         </SelectItem>
                       ),

@@ -1,6 +1,12 @@
 import 'server-only';
 
 import fallbackDataset from '@/lib/sjc-data.json';
+import {
+  getPnjMarketData,
+  type PnjCompany,
+  type PnjProduct,
+} from '@/lib/server/pnj';
+import { getVgjMarketData } from '@/lib/server/vgj';
 import type { SjcProduct } from '@/lib/sjc-products';
 import {
   getMarketCompany,
@@ -876,6 +882,8 @@ export async function getMarketData(
   switch (company.adapter) {
     case 'sjc-official':
       return getSjcMarketDataInternal(product as SjcProduct);
+    case 'pnj-official':
+      return getPnjMarketData(company as PnjCompany, product as PnjProduct);
     case 'btmc-official':
       return getBtmcWithFallback(company, product as BtmcProduct);
     case 'phuquy-official':
@@ -885,6 +893,8 @@ export async function getMarketData(
         () => fetchPhuQuyQuote(product as PhuQuyProduct),
         () => fetchPhuQuyHistory(product as PhuQuyProduct),
       );
+    case 'vgj-official':
+      return getVgjMarketData(product.id);
     case 'unavailable':
       return unavailableMarketData(
         company,
