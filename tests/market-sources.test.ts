@@ -142,6 +142,61 @@ describe('market source registry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(8);
   });
 
+  it('uses only documented Vang.Today codes as a fast BTMC fallback', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes('btmc.vn')) throw new Error('BTMC official unavailable');
+      if (url.includes('days=')) {
+        return Response.json({
+          success: true,
+          history: [
+            {
+              date: '2026-09-03',
+              prices: {
+                BT9999NTT: { buy: 145_000_000, sell: 149_000_000 },
+              },
+            },
+          ],
+        });
+      }
+      return Response.json({
+        success: true,
+        timestamp: 1_788_453_005,
+        buy: 145_600_000,
+        sell: 149_600_000,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const market = await getMarketData('btmc', 'btmc-ring');
+    expect(market.availability).toBe('available');
+    expect(market.mode).toBe('live');
+    expect(market.product.id).toBe('btmc-ring');
+    expect(market.source).toMatchObject({
+      provider: 'Vang.Today aggregator (BTMC fallback)',
+      official: false,
+      url: 'https://www.vang.today/vi/api',
+    });
+    expect(market.latest).toMatchObject({ buy: 145.6, sell: 149.6 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(
+      fetchMock.mock.calls.some(([input]) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        return url.includes('type=BT9999NTT');
+      }),
+    ).toBe(true);
+  });
+
   it('normalizes BTMC official JSON and omits rows without a sell quote', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url =
@@ -156,12 +211,15 @@ describe('market source registry', () => {
             <table><tbody>
               <tr><td>NHẪN TRÒN TRƠN BẢO TÍN<br/> MINH CHÂU</td><td>999.9</td><td><b>14500</b></td><td><b>14900</b></td></tr>
               <tr><td>VÀNG MIẾNG SJC</td><td>999.9</td><td><b>14560</b></td><td><b>14960</b></td></tr>
+              <tr><td>QUÀ MỪNG <br/> BẢN VỊ VÀNG<br/> BẢO TÍN <br/>MINH CHÂU</td><td>999.9</td><td><b>14500</b></td><td><b>14900</b></td></tr>
             </tbody></table>`);
         }
         return Response.json({
           Data: {
             btmcvangnhanmua: '<b>14500</b>',
             btmcvangnhanban: '<b>14900</b>',
+            btmcvangquamungmua: '<b>14500</b>',
+            btmcvangquamungban: '<b>14900</b>',
             sjcmua: '<b>14560</b>',
             sjcban: '<b>14960</b>',
           },
@@ -171,7 +229,7 @@ describe('market source registry', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const market = await getMarketData('btmc', 'btmc-ring');
+    const market = await getMarketData('btmc', 'btmc-gift');
     expect(market.mode).toBe('live');
     expect(market.source).toMatchObject({
       provider: 'Bảo Tín Minh Châu official',

@@ -78,8 +78,8 @@ const phuQuyHistoryHtmlCache = new Map<
 >();
 const phuQuyHistoryHtmlInFlight = new Map<string, Promise<string>>();
 
-function timeoutSignal() {
-  return AbortSignal.timeout(7_000);
+function timeoutSignal(milliseconds = 7_000) {
+  return AbortSignal.timeout(milliseconds);
 }
 
 function isValidPrice(buy: number, sell: number) {
@@ -397,7 +397,7 @@ async function fetchBtmcCurrentQuote(product: BtmcProduct): Promise<LiveQuote> {
       Accept: 'text/html,application/xhtml+xml',
       'User-Agent': 'KimTuyen-MarketView/1.0',
     },
-    signal: timeoutSignal(),
+    signal: timeoutSignal(4_000),
   });
   if (!response.ok) throw new Error(`BTMC upstream ${response.status}`);
   const row = findOfficialRow(
@@ -461,6 +461,7 @@ async function getFirstPartyMarketData(
   product: BtmcProduct | PhuQuyProduct,
   fetchQuote: () => Promise<LiveQuote>,
   fetchHistory: () => Promise<PricePoint[]>,
+  options: { loadHistoryWhenQuoteUnavailable?: boolean } = {},
 ): Promise<MarketData> {
   // Fetch the live quote first. Official history endpoints are one-date-per-
   // request and may be slow; a history timeout must never hide a live quote.
@@ -472,10 +473,12 @@ async function getFirstPartyMarketData(
     // is temporarily unavailable, so continue with the best-effort history.
   }
   let history: PricePoint[] = [];
-  try {
-    history = await fetchHistory();
-  } catch {
-    // Keep the current quote available even if history cannot be loaded.
+  if (quote || options.loadHistoryWhenQuoteUnavailable !== false) {
+    try {
+      history = await fetchHistory();
+    } catch {
+      // Keep the current quote available even if history cannot be loaded.
+    }
   }
   const merged = new Map<string, PricePoint>();
   for (const point of history) merged.set(point.date, point);
@@ -529,6 +532,7 @@ async function getCachedFirstPartyMarketData(
   product: BtmcProduct | PhuQuyProduct,
   fetchQuote: () => Promise<LiveQuote>,
   fetchHistory: () => Promise<PricePoint[]>,
+  options: { loadHistoryWhenQuoteUnavailable?: boolean } = {},
 ) {
   const key = `${company.id}:${product.id}`;
   const cached = firstPartyMarketCache.get(key);
@@ -542,6 +546,7 @@ async function getCachedFirstPartyMarketData(
     product,
     fetchQuote,
     fetchHistory,
+    options,
   )
     .then((data) => {
       firstPartyMarketCache.set(key, {
@@ -557,12 +562,42 @@ async function getCachedFirstPartyMarketData(
   return pending;
 }
 
+async function getBtmcWithFallback(
+  company: ReturnType<typeof getMarketCompany>,
+  product: BtmcProduct,
+): Promise<MarketData> {
+  const official = await getCachedFirstPartyMarketData(
+    company,
+    product,
+    () => fetchBtmcCurrentQuote(product),
+    () => fetchBtmcHistory(product),
+    // Do not spend another seven upstream timeouts before trying the known,
+    // exact Vang.Today code when today's official page is unavailable.
+    { loadHistoryWhenQuoteUnavailable: false },
+  );
+  if (official.availability === 'available') return official;
+
+  const fallbackCode =
+    'fallbackUpstreamCode' in product
+      ? product.fallbackUpstreamCode
+      : undefined;
+  if (!fallbackCode) return official;
+
+  return getAggregatedMarketData(
+    company,
+    product,
+    fallbackCode,
+    'Vang.Today aggregator (BTMC fallback)',
+  );
+}
+
 async function fetchAggregatedQuote(
   product: MarketProduct,
+  upstreamCodeOverride?: string,
 ): Promise<LiveQuote> {
-  if (!product.upstreamCode)
-    throw new Error('Market product has no Vang.Today code');
-  const url = `${VANG_TODAY_API}?type=${product.upstreamCode}`;
+  const upstreamCode = upstreamCodeOverride ?? product.upstreamCode;
+  if (!upstreamCode) throw new Error('Market product has no Vang.Today code');
+  const url = `${VANG_TODAY_API}?type=${upstreamCode}`;
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: timeoutSignal(),
@@ -594,8 +629,9 @@ async function fetchAggregatedQuote(
 
 async function fetchProductHistory(
   product: MarketProduct,
+  upstreamCodeOverride?: string,
 ): Promise<PricePoint[]> {
-  const upstreamCode = product.upstreamCode;
+  const upstreamCode = upstreamCodeOverride ?? product.upstreamCode;
   if (!upstreamCode) return [];
   // Vang.Today documents a maximum of 30 calendar days. Keep the adapter
   // inside that contract instead of implying a longer history exists.
@@ -774,10 +810,12 @@ function unavailableMarketData(
 async function getAggregatedMarketData(
   company: ReturnType<typeof getMarketCompany>,
   product: MarketProduct,
+  upstreamCodeOverride?: string,
+  providerLabel = 'Vang.Today aggregator',
 ): Promise<MarketData> {
   const [quoteResult, historyResult] = await Promise.allSettled([
-    fetchAggregatedQuote(product),
-    fetchProductHistory(product),
+    fetchAggregatedQuote(product, upstreamCodeOverride),
+    fetchProductHistory(product, upstreamCodeOverride),
   ]);
   const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
   const history =
@@ -811,17 +849,17 @@ async function getAggregatedMarketData(
     observedAt: quote?.observedAt ?? `${latest.date}T00:00:00+07:00`,
     source: quote
       ? {
-          provider: 'Vang.Today aggregator',
+          provider: providerLabel,
           url: quote.providerUrl,
           official: false,
         }
       : {
-          provider: 'Vang.Today history',
+          provider: `${providerLabel} history`,
           url: 'https://www.vang.today/vi/api',
           official: false,
         },
     historySource: {
-      provider: 'Vang.Today history (tối đa 30 ngày)',
+      provider: `${providerLabel} history (tối đa 30 ngày)`,
       url: 'https://www.vang.today/vi/api',
     },
     generatedAt: new Date().toISOString(),
@@ -839,15 +877,7 @@ export async function getMarketData(
     case 'sjc-official':
       return getSjcMarketDataInternal(product as SjcProduct);
     case 'btmc-official':
-      return getCachedFirstPartyMarketData(
-        company,
-        product as BtmcProduct,
-        () =>
-          fetchBtmcCurrentQuote(product as BtmcProduct).catch(() =>
-            fetchBtmcQuote(product as BtmcProduct, vietnamDate()),
-          ),
-        () => fetchBtmcHistory(product as BtmcProduct),
-      );
+      return getBtmcWithFallback(company, product as BtmcProduct);
     case 'phuquy-official':
       return getCachedFirstPartyMarketData(
         company,

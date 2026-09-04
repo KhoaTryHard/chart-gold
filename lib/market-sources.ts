@@ -141,6 +141,8 @@ export type AggregatedMarketProduct = {
   officialMatch: string | null;
   /** Key used by the BTMC historical JSON endpoint, when applicable. */
   officialKey?: string;
+  /** Exact Vang.Today code allowed as a transparent BTMC fallback. */
+  fallbackUpstreamCode?: string;
 };
 
 /**
@@ -288,6 +290,7 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     weightInLuong: 1,
     officialMatch: 'NHẪN TRÒN TRƠN BẢO TÍN MINH CHÂU',
     officialKey: 'btmcvangnhanmua',
+    fallbackUpstreamCode: 'BT9999NTT',
   },
   {
     id: 'btmc-gift',
@@ -314,6 +317,7 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     weightInLuong: 1,
     officialMatch: 'VÀNG MIẾNG SJC',
     officialKey: 'sjcmua',
+    fallbackUpstreamCode: 'BTSJC',
   },
   {
     id: 'btmc-jewelry-9999',
@@ -439,7 +443,11 @@ const PRODUCTS_BY_COMPANY: Record<MarketCompanyId, readonly MarketProduct[]> = {
   ),
   btmc: OFFICIAL_MARKET_PRODUCTS.filter(
     (product) => product.companyId === 'btmc',
-  ),
+  ).sort((left, right) => {
+    if (left.id === 'btmc-ring') return -1;
+    if (right.id === 'btmc-ring') return 1;
+    return 0;
+  }),
   phuquy: OFFICIAL_MARKET_PRODUCTS.filter(
     (product) => product.companyId === 'phuquy',
   ),
