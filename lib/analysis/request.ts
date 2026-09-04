@@ -1,15 +1,23 @@
 import { z } from 'zod';
 
 import { ANALYSIS_RANGES, type AnalysisRange } from '@/lib/analysis/metrics';
-import { SJC_PRODUCTS } from '@/lib/sjc-products';
+import {
+  MARKET_COMPANIES,
+  MARKET_PRODUCTS,
+} from '@/lib/market-sources';
 
-const productIds = SJC_PRODUCTS.map((product) => product.id) as [
+const companyIds = MARKET_COMPANIES.map((company) => company.id) as [
+  string,
+  ...string[],
+];
+const productIds = MARKET_PRODUCTS.map((product) => product.id) as [
   string,
   ...string[],
 ];
 
 export const analysisRequestSchema = z.object({
   question: z.string().trim().min(1).max(1_500),
+  companyId: z.enum(companyIds).default('sjc'),
   productId: z.enum(productIds),
   range: z.enum(
     Object.keys(ANALYSIS_RANGES) as [AnalysisRange, ...AnalysisRange[]],

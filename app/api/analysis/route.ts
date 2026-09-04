@@ -11,7 +11,7 @@ import {
   type AnalysisEvent,
 } from '@/lib/analysis/provider';
 import { analysisRequestSchema } from '@/lib/analysis/request';
-import { getSjcMarketData } from '@/lib/server/sjc';
+import { getMarketData } from '@/lib/server/sjc';
 
 export const runtime = 'nodejs';
 
@@ -87,11 +87,14 @@ export async function POST(request: Request) {
 
   let market;
   try {
-    market = await getSjcMarketData(parsed.data.productId);
+    market = await getMarketData(
+      parsed.data.companyId,
+      parsed.data.productId,
+    );
   } catch {
     return jsonError('Không thể tải dữ liệu giá tin cậy lúc này.', 503);
   }
-  if (market.records.length === 0) {
+  if (market.records.length === 0 || market.availability === 'unavailable') {
     return jsonError('Chưa có dữ liệu giá để phân tích.', 503);
   }
 

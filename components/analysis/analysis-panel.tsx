@@ -32,12 +32,17 @@ import {
   type ChatSource,
   type StoredChatMessage,
 } from '@/lib/ai-chat-storage';
-import type { SjcProduct } from '@/lib/sjc-products';
+import {
+  getMarketCompany,
+  type MarketCompanyId,
+  type MarketProduct,
+} from '@/lib/market-sources';
 
 type AnalysisRange = '7N' | '1T' | '1N';
 
 type Props = {
-  product: SjcProduct;
+  product: MarketProduct;
+  companyId: MarketCompanyId;
   productId: string;
   range: AnalysisRange;
   observedAt: string;
@@ -85,6 +90,7 @@ function isAbortError(error: unknown) {
 
 export function AnalysisPanel({
   product,
+  companyId,
   productId,
   range,
   observedAt,
@@ -186,6 +192,7 @@ export function AnalysisPanel({
       content: cleanQuestion,
       sources: [],
       createdAt: new Date().toISOString(),
+      companyId,
       productId,
       range,
       model: null,
@@ -197,6 +204,7 @@ export function AnalysisPanel({
       content: '',
       sources: [],
       createdAt: new Date().toISOString(),
+      companyId,
       productId,
       range,
       model: null,
@@ -226,6 +234,7 @@ export function AnalysisPanel({
         credentials: 'same-origin',
         body: JSON.stringify({
           question: cleanQuestion,
+          companyId,
           productId,
           range,
           messages: context,
@@ -345,9 +354,12 @@ export function AnalysisPanel({
             Phân tích AI
           </SheetTitle>
           <SheetDescription>
-            Trợ lý đọc dữ liệu SJC đã chuẩn hóa trên máy chủ.
+            Trợ lý đọc dữ liệu giá đã chuẩn hóa trên máy chủ.
           </SheetDescription>
           <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-medium">
+            <span className="rounded-full bg-accent px-2.5 py-1 text-accent-foreground">
+              {getMarketCompany(companyId).shortName}
+            </span>
             <span className="rounded-full bg-accent px-2.5 py-1 text-accent-foreground">
               {product.shortLabel}
             </span>

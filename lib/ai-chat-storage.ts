@@ -15,6 +15,8 @@ export type StoredChatMessage = {
   content: string;
   sources: ChatSource[];
   createdAt: string;
+  /** Added after v1 shipped; old messages default to SJC when read. */
+  companyId?: string;
   productId: string;
   range: string;
   model: string | null;
@@ -78,6 +80,10 @@ function cleanMessage(value: unknown): StoredChatMessage | null {
     content: value.content.slice(0, 80_000),
     sources,
     createdAt: createdAt.toISOString(),
+    companyId:
+      typeof value.companyId === 'string'
+        ? value.companyId.slice(0, 50)
+        : 'sjc',
     productId: value.productId.slice(0, 100),
     range: value.range.slice(0, 20),
     model: typeof value.model === 'string' ? value.model.slice(0, 100) : null,
