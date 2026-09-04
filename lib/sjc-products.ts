@@ -100,7 +100,12 @@ export const SJC_PRODUCTS = [
   },
 ] as const;
 
-export type SjcProduct = (typeof SJC_PRODUCTS)[number];
+// SJC rows predate the multi-company registry and do not carry this field at
+// runtime. The optional discriminator keeps shared consumers type-safe while
+// preserving the existing serialized product shape.
+export type SjcProduct = (typeof SJC_PRODUCTS)[number] & {
+  companyId?: 'sjc';
+};
 export type SjcProductId = SjcProduct['id'];
 
 export const DEFAULT_SJC_PRODUCT_ID: SjcProductId = 'bar-1l';

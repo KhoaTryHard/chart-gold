@@ -1,11 +1,13 @@
 import 'server-only';
 
 import fallbackDataset from '@/lib/sjc-data.json';
+import type { SjcProduct } from '@/lib/sjc-products';
 import {
-  getSjcProduct,
-  SJC_PRODUCTS,
-  type SjcProduct,
-} from '@/lib/sjc-products';
+  getMarketCompany,
+  getMarketProduct,
+  getMarketProducts,
+  type MarketProduct,
+} from '@/lib/market-sources';
 
 export type PricePoint = {
   date: string;
@@ -23,12 +25,20 @@ type LiveQuote = {
   providerUrl: string;
 };
 
-export type MarketDataMode = 'live' | 'delayed' | 'fallback';
+type BtmcProduct = MarketProduct & { companyId: 'btmc' };
+type PhuQuyProduct = MarketProduct & { companyId: 'phuquy' };
+
+export type MarketDataMode = 'live' | 'delayed' | 'fallback' | 'unavailable';
+
+export type MarketAvailability = 'available' | 'unavailable';
 
 export type MarketData = {
   mode: MarketDataMode;
-  product: SjcProduct;
-  products: typeof SJC_PRODUCTS;
+  availability: MarketAvailability;
+  unavailableReason: string | null;
+  company: ReturnType<typeof getMarketCompany>;
+  product: MarketProduct;
+  products: readonly MarketProduct[];
   records: PricePoint[];
   latest: PricePoint | null;
   observedAt: string;
@@ -41,6 +51,32 @@ const OFFICIAL_SJC_URL = 'https://sjc.com.vn/xml/tygiavang.xml';
 const VANG_TODAY_API = 'https://www.vang.today/api/prices';
 const HISTORY_CSV_URL =
   'https://raw.githubusercontent.com/vkhuy/SJC-price/main/docs/data/sjc_final.csv';
+const VANG_TODAY_HISTORY_DAYS = 30;
+const BTMC_GOLD_DATE_API = 'https://btmc.vn/ProductHome/getGoldDate';
+const BTMC_PRICE_PAGE = 'https://btmc.vn/Home/BGiaVang';
+const PHU_QUY_PRICE_PAGE = 'https://gold.phuquy.com.vn/giavang';
+const PHU_QUY_HISTORY_PAGE = 'https://gold.phuquy.com.vn/XemLai';
+const OFFICIAL_HISTORY_DAYS = 7;
+const FIRST_PARTY_CACHE_TTL_MS = 4 * 60 * 1_000;
+
+const firstPartyMarketCache = new Map<
+  string,
+  { expiresAt: number; data: MarketData }
+>();
+const firstPartyMarketInFlight = new Map<string, Promise<MarketData>>();
+const btmcHistoryPayloadCache = new Map<
+  string,
+  { expiresAt: number; payload: BtmcHistoryPayload }
+>();
+const btmcHistoryPayloadInFlight = new Map<
+  string,
+  Promise<BtmcHistoryPayload>
+>();
+const phuQuyHistoryHtmlCache = new Map<
+  string,
+  { expiresAt: number; html: string }
+>();
+const phuQuyHistoryHtmlInFlight = new Map<string, Promise<string>>();
 
 function timeoutSignal() {
   return AbortSignal.timeout(7_000);
@@ -122,7 +158,410 @@ async function fetchOfficialQuote(product: SjcProduct): Promise<LiveQuote> {
   };
 }
 
-async function fetchAggregatedQuote(product: SjcProduct): Promise<LiveQuote> {
+function previousDates(days: number) {
+  const today = vietnamDate();
+  const base = new Date(`${today}T00:00:00Z`);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(base);
+    date.setUTCDate(date.getUTCDate() - index - 1);
+    return date.toISOString().slice(0, 10);
+  });
+}
+
+function decodeHtml(value: string) {
+  const named: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"',
+  };
+  return value
+    .replace(/&#(x[\da-f]+|\d+);/gi, (_match, code: string) => {
+      const radix = code.toLowerCase().startsWith('x') ? 16 : 10;
+      const digits = radix === 16 ? code.slice(1) : code;
+      const point = Number.parseInt(digits, radix);
+      return Number.isFinite(point) ? String.fromCodePoint(point) : '';
+    })
+    .replace(
+      /&([a-z]+);/gi,
+      (_match, name: string) => named[name.toLowerCase()] ?? '',
+    );
+}
+
+function stripHtml(value: string) {
+  return decodeHtml(value.replace(/<[^>]*>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseWholeNumber(value: string | null | undefined) {
+  if (!value) return null;
+  const digits = stripHtml(value).replace(/[^\d]/g, '');
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+type OfficialTableRow = {
+  label: string;
+  buy: number | null;
+  sell: number | null;
+};
+
+function parseOfficialTableRows(html: string): OfficialTableRow[] {
+  const rows = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+  return rows.flatMap((row) => {
+    const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(
+      (match) => stripHtml(match[1]),
+    );
+    if (cells.length < 3) return [];
+    // BTMC prepends a logo cell with rowspan; Phú Quý does not. Select the
+    // first textual product cell instead of assuming it is cells[0].
+    const label = cells.find(
+      (cell) =>
+        /[^\d\s.,]/.test(cell) && !/^\(?\d+(?:[.,]\d+)?k\)?$/i.test(cell),
+    );
+    const buy = parseWholeNumber(cells.at(-2));
+    const sell = parseWholeNumber(cells.at(-1));
+    return label && (buy !== null || sell !== null)
+      ? [{ label, buy, sell }]
+      : [];
+  });
+}
+
+function findOfficialRow(rows: OfficialTableRow[], match: string) {
+  const expected = normalizeOfficialName(match);
+  return rows.find((row) => {
+    const actual = normalizeOfficialName(row.label);
+    return actual === expected || actual.includes(expected);
+  });
+}
+
+async function fetchPhuQuyQuote(
+  product: PhuQuyProduct,
+  url = PHU_QUY_PRICE_PAGE,
+  observedAt = new Date().toISOString(),
+): Promise<LiveQuote> {
+  if (!product.officialMatch)
+    throw new Error('Phú Quý product has no official match');
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'KimTuyen-MarketView/1.0',
+    },
+    signal: timeoutSignal(),
+  });
+  if (!response.ok) throw new Error(`Phú Quý upstream ${response.status}`);
+
+  return parsePhuQuyQuoteFromHtml(product, await response.text(), observedAt);
+}
+
+function parsePhuQuyQuoteFromHtml(
+  product: PhuQuyProduct,
+  html: string,
+  observedAt: string,
+): LiveQuote {
+  if (!product.officialMatch)
+    throw new Error('Phú Quý product has no official match');
+  const row = findOfficialRow(
+    parseOfficialTableRows(html),
+    product.officialMatch,
+  );
+  // The official Phú Quý table is denominated in VND/chỉ. The dashboard
+  // standard is VND/lượng, so convert only after parsing both sides.
+  if (!row?.buy || !row.sell) throw new Error('Phú Quý quote is incomplete');
+  const buy = (row.buy * 10) / 1_000_000;
+  const sell = (row.sell * 10) / 1_000_000;
+  if (!isValidPrice(buy, sell)) throw new Error('Phú Quý quote is invalid');
+
+  return {
+    buy,
+    sell,
+    observedAt,
+    provider: 'Phú Quý official',
+    providerUrl: PHU_QUY_PRICE_PAGE,
+  };
+}
+
+async function fetchPhuQuyHistory(
+  product: PhuQuyProduct,
+): Promise<PricePoint[]> {
+  if (!product.officialMatch) return [];
+  const dates = previousDates(OFFICIAL_HISTORY_DAYS);
+  const responses = await Promise.allSettled(
+    dates.map(async (date) => {
+      const html = await fetchPhuQuyHistoryHtml(date);
+      const quote = parsePhuQuyQuoteFromHtml(
+        product,
+        html,
+        `${date}T12:00:00+07:00`,
+      );
+      return toPoint(date, quote.buy, quote.sell);
+    }),
+  );
+  return responses.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  );
+}
+
+type BtmcHistoryPayload = {
+  Data?: Record<string, string | null>;
+};
+
+async function fetchBtmcHistoryPayload(
+  date: string,
+): Promise<BtmcHistoryPayload> {
+  const cached = btmcHistoryPayloadCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) return cached.payload;
+  const existing = btmcHistoryPayloadInFlight.get(date);
+  if (existing) return existing;
+
+  const [year, month, day] = date.split('-');
+  const btmcDate = `${day}/${month}/${year}`;
+  const url = `${BTMC_GOLD_DATE_API}?date=${encodeURIComponent(btmcDate)}`;
+  const pending = fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'KimTuyen-MarketView/1.0',
+    },
+    signal: timeoutSignal(),
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`BTMC upstream ${response.status}`);
+      const payload = (await response.json()) as BtmcHistoryPayload;
+      btmcHistoryPayloadCache.set(date, {
+        payload,
+        expiresAt: Date.now() + FIRST_PARTY_CACHE_TTL_MS,
+      });
+      return payload;
+    })
+    .finally(() => {
+      btmcHistoryPayloadInFlight.delete(date);
+    });
+  btmcHistoryPayloadInFlight.set(date, pending);
+  return pending;
+}
+
+async function fetchPhuQuyHistoryHtml(date: string): Promise<string> {
+  const cached = phuQuyHistoryHtmlCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) return cached.html;
+  const existing = phuQuyHistoryHtmlInFlight.get(date);
+  if (existing) return existing;
+
+  const url = `${PHU_QUY_HISTORY_PAGE}?date=${encodeURIComponent(date)}`;
+  const pending = fetch(url, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'KimTuyen-MarketView/1.0',
+    },
+    signal: timeoutSignal(),
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Phú Quý upstream ${response.status}`);
+      const html = await response.text();
+      phuQuyHistoryHtmlCache.set(date, {
+        html,
+        expiresAt: Date.now() + FIRST_PARTY_CACHE_TTL_MS,
+      });
+      return html;
+    })
+    .finally(() => {
+      phuQuyHistoryHtmlInFlight.delete(date);
+    });
+  phuQuyHistoryHtmlInFlight.set(date, pending);
+  return pending;
+}
+
+function parseBtmcValue(value: string | null | undefined) {
+  const parsed = parseWholeNumber(value);
+  // BTMC reports thousand VND per chỉ. The dashboard uses million VND per
+  // lượng, so multiply by ten chỉ/lượng before converting thousand to million.
+  return parsed === null ? null : parsed / 100;
+}
+
+function getBtmcKey(product: BtmcProduct) {
+  if (!('officialKey' in product) || !product.officialKey) {
+    throw new Error('BTMC product has no official key');
+  }
+  return product.officialKey;
+}
+
+async function fetchBtmcCurrentQuote(product: BtmcProduct): Promise<LiveQuote> {
+  if (!product.officialMatch) {
+    throw new Error('BTMC product has no official match');
+  }
+  const response = await fetch(BTMC_PRICE_PAGE, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'KimTuyen-MarketView/1.0',
+    },
+    signal: timeoutSignal(),
+  });
+  if (!response.ok) throw new Error(`BTMC upstream ${response.status}`);
+  const row = findOfficialRow(
+    parseOfficialTableRows(await response.text()),
+    product.officialMatch,
+  );
+  const buy =
+    row?.buy === null || row?.buy === undefined ? null : row.buy / 100;
+  const sell =
+    row?.sell === null || row?.sell === undefined ? null : row.sell / 100;
+  if (buy === null || sell === null || !isValidPrice(buy, sell)) {
+    throw new Error('BTMC quote is incomplete or invalid');
+  }
+  return {
+    buy,
+    sell,
+    observedAt: new Date().toISOString(),
+    provider: 'Bảo Tín Minh Châu official',
+    providerUrl: BTMC_PRICE_PAGE,
+  };
+}
+
+async function fetchBtmcQuote(
+  product: BtmcProduct,
+  date: string,
+): Promise<LiveQuote> {
+  const payload = await fetchBtmcHistoryPayload(date);
+  const data = payload.Data;
+  const key = getBtmcKey(product);
+  const buy = parseBtmcValue(data?.[key]);
+  const sell = parseBtmcValue(data?.[key.replace(/mua$/, 'ban')]);
+  if (buy === null || sell === null || !isValidPrice(buy, sell)) {
+    throw new Error('BTMC quote is incomplete or invalid');
+  }
+  return {
+    buy,
+    sell,
+    observedAt:
+      date === vietnamDate()
+        ? new Date().toISOString()
+        : `${date}T12:00:00+07:00`,
+    provider: 'Bảo Tín Minh Châu official',
+    providerUrl: BTMC_PRICE_PAGE,
+  };
+}
+
+async function fetchBtmcHistory(product: BtmcProduct): Promise<PricePoint[]> {
+  const responses = await Promise.allSettled(
+    previousDates(OFFICIAL_HISTORY_DAYS).map(async (date) => {
+      const quote = await fetchBtmcQuote(product, date);
+      return toPoint(date, quote.buy, quote.sell);
+    }),
+  );
+  return responses.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  );
+}
+
+async function getFirstPartyMarketData(
+  company: ReturnType<typeof getMarketCompany>,
+  product: BtmcProduct | PhuQuyProduct,
+  fetchQuote: () => Promise<LiveQuote>,
+  fetchHistory: () => Promise<PricePoint[]>,
+): Promise<MarketData> {
+  // Fetch the live quote first. Official history endpoints are one-date-per-
+  // request and may be slow; a history timeout must never hide a live quote.
+  let quote: LiveQuote | null = null;
+  try {
+    quote = await fetchQuote();
+  } catch {
+    // A delayed official history point may still be useful when today's quote
+    // is temporarily unavailable, so continue with the best-effort history.
+  }
+  let history: PricePoint[] = [];
+  try {
+    history = await fetchHistory();
+  } catch {
+    // Keep the current quote available even if history cannot be loaded.
+  }
+  const merged = new Map<string, PricePoint>();
+  for (const point of history) merged.set(point.date, point);
+  if (quote) {
+    const date = vietnamDate(new Date(quote.observedAt));
+    merged.set(date, toPoint(date, quote.buy, quote.sell));
+  }
+  const records = [...merged.values()]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(-company.maxHistoryDays);
+  const latest = records.at(-1) ?? null;
+  if (!latest) {
+    return unavailableMarketData(
+      company,
+      product,
+      `Nguồn ${company.name} hiện không trả dữ liệu cho sản phẩm này. Không có snapshot thay thế để tránh hiển thị giá không xác thực.`,
+    );
+  }
+
+  return {
+    mode: quote ? 'live' : 'delayed',
+    availability: 'available',
+    unavailableReason: null,
+    company,
+    product,
+    products: getMarketProducts(company.id),
+    records,
+    latest,
+    observedAt: quote?.observedAt ?? `${latest.date}T12:00:00+07:00`,
+    source: quote
+      ? {
+          provider: quote.provider,
+          url: quote.providerUrl,
+          official: true,
+        }
+      : {
+          provider: `${company.name} official (history)`,
+          url: company.sourceUrl,
+          official: true,
+        },
+    historySource: {
+      provider: `${company.name} official history (tối đa ${company.maxHistoryDays} ngày)`,
+      url: company.sourceUrl,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function getCachedFirstPartyMarketData(
+  company: ReturnType<typeof getMarketCompany>,
+  product: BtmcProduct | PhuQuyProduct,
+  fetchQuote: () => Promise<LiveQuote>,
+  fetchHistory: () => Promise<PricePoint[]>,
+) {
+  const key = `${company.id}:${product.id}`;
+  const cached = firstPartyMarketCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const existing = firstPartyMarketInFlight.get(key);
+  if (existing) return existing;
+
+  const pending = getFirstPartyMarketData(
+    company,
+    product,
+    fetchQuote,
+    fetchHistory,
+  )
+    .then((data) => {
+      firstPartyMarketCache.set(key, {
+        data,
+        expiresAt: Date.now() + FIRST_PARTY_CACHE_TTL_MS,
+      });
+      return data;
+    })
+    .finally(() => {
+      firstPartyMarketInFlight.delete(key);
+    });
+  firstPartyMarketInFlight.set(key, pending);
+  return pending;
+}
+
+async function fetchAggregatedQuote(
+  product: MarketProduct,
+): Promise<LiveQuote> {
+  if (!product.upstreamCode)
+    throw new Error('Market product has no Vang.Today code');
   const url = `${VANG_TODAY_API}?type=${product.upstreamCode}`;
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -153,8 +592,14 @@ async function fetchAggregatedQuote(product: SjcProduct): Promise<LiveQuote> {
   };
 }
 
-async function fetchProductHistory(product: SjcProduct): Promise<PricePoint[]> {
-  const url = `${VANG_TODAY_API}?type=${product.upstreamCode}&days=365`;
+async function fetchProductHistory(
+  product: MarketProduct,
+): Promise<PricePoint[]> {
+  const upstreamCode = product.upstreamCode;
+  if (!upstreamCode) return [];
+  // Vang.Today documents a maximum of 30 calendar days. Keep the adapter
+  // inside that contract instead of implying a longer history exists.
+  const url = `${VANG_TODAY_API}?type=${upstreamCode}&days=${VANG_TODAY_HISTORY_DAYS}`;
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: timeoutSignal(),
@@ -171,7 +616,7 @@ async function fetchProductHistory(product: SjcProduct): Promise<PricePoint[]> {
   if (!payload.success || !Array.isArray(payload.history)) return [];
 
   return payload.history.flatMap((row) => {
-    const quote = row.prices?.[product.upstreamCode];
+    const quote = row.prices?.[upstreamCode];
     const buy = Number(quote?.buy) / 1_000_000;
     const sell = Number(quote?.sell) / 1_000_000;
     return row.date && isValidPrice(buy, sell)
@@ -198,10 +643,10 @@ async function fetchHistoricalCsv(): Promise<PricePoint[]> {
   });
 }
 
-export async function getSjcMarketData(
-  productId: string | null | undefined,
+async function getSjcMarketDataInternal(
+  product: SjcProduct,
 ): Promise<MarketData> {
-  const product = getSjcProduct(productId);
+  const company = getMarketCompany('sjc');
   const [
     officialResult,
     aggregateResult,
@@ -253,8 +698,11 @@ export async function getSjcMarketData(
 
   return {
     mode,
+    availability: 'available',
+    unavailableReason: null,
+    company,
     product,
-    products: SJC_PRODUCTS,
+    products: getMarketProducts(company.id),
     records,
     latest,
     observedAt:
@@ -293,4 +741,134 @@ export async function getSjcMarketData(
     },
     generatedAt: new Date().toISOString(),
   };
+}
+
+function unavailableMarketData(
+  company: ReturnType<typeof getMarketCompany>,
+  product: MarketProduct,
+  reason: string,
+): MarketData {
+  return {
+    mode: 'unavailable',
+    availability: 'unavailable',
+    unavailableReason: reason,
+    company,
+    product,
+    products: getMarketProducts(company.id),
+    records: [],
+    latest: null,
+    observedAt: new Date().toISOString(),
+    source: {
+      provider: company.provider,
+      url: company.sourceUrl,
+      official: false,
+    },
+    historySource: {
+      provider: 'Chưa có dữ liệu lịch sử khả dụng',
+      url: null,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function getAggregatedMarketData(
+  company: ReturnType<typeof getMarketCompany>,
+  product: MarketProduct,
+): Promise<MarketData> {
+  const [quoteResult, historyResult] = await Promise.allSettled([
+    fetchAggregatedQuote(product),
+    fetchProductHistory(product),
+  ]);
+  const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
+  const history =
+    historyResult.status === 'fulfilled' ? historyResult.value : [];
+  const merged = new Map<string, PricePoint>();
+  for (const point of history) merged.set(point.date, point);
+  if (quote) {
+    const date = vietnamDate(new Date(quote.observedAt));
+    merged.set(date, toPoint(date, quote.buy, quote.sell));
+  }
+  const records = [...merged.values()]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(-VANG_TODAY_HISTORY_DAYS);
+  const latest = records.at(-1) ?? null;
+  if (!latest) {
+    return unavailableMarketData(
+      company,
+      product,
+      'Nguồn Vang.Today hiện không trả dữ liệu cho mã sản phẩm này. Không có snapshot thay thế để tránh hiển thị giá không xác thực.',
+    );
+  }
+  return {
+    mode: quote ? 'live' : 'delayed',
+    availability: 'available',
+    unavailableReason: null,
+    company,
+    product,
+    products: getMarketProducts(company.id),
+    records,
+    latest,
+    observedAt: quote?.observedAt ?? `${latest.date}T00:00:00+07:00`,
+    source: quote
+      ? {
+          provider: 'Vang.Today aggregator',
+          url: quote.providerUrl,
+          official: false,
+        }
+      : {
+          provider: 'Vang.Today history',
+          url: 'https://www.vang.today/vi/api',
+          official: false,
+        },
+    historySource: {
+      provider: 'Vang.Today history (tối đa 30 ngày)',
+      url: 'https://www.vang.today/vi/api',
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** Resolve a company/product pair and dispatch to that company's adapter. */
+export async function getMarketData(
+  companyId: string | null | undefined,
+  productId: string | null | undefined,
+): Promise<MarketData> {
+  const company = getMarketCompany(companyId);
+  const product = getMarketProduct(company.id, productId);
+  switch (company.adapter) {
+    case 'sjc-official':
+      return getSjcMarketDataInternal(product as SjcProduct);
+    case 'btmc-official':
+      return getCachedFirstPartyMarketData(
+        company,
+        product as BtmcProduct,
+        () =>
+          fetchBtmcCurrentQuote(product as BtmcProduct).catch(() =>
+            fetchBtmcQuote(product as BtmcProduct, vietnamDate()),
+          ),
+        () => fetchBtmcHistory(product as BtmcProduct),
+      );
+    case 'phuquy-official':
+      return getCachedFirstPartyMarketData(
+        company,
+        product as PhuQuyProduct,
+        () => fetchPhuQuyQuote(product as PhuQuyProduct),
+        () => fetchPhuQuyHistory(product as PhuQuyProduct),
+      );
+    case 'unavailable':
+      return unavailableMarketData(
+        company,
+        product,
+        'Chưa có endpoint Mi Hồng hoạt động và đã xác minh. Không hiển thị giá từ nguồn tổng hợp không kiểm chứng.',
+      );
+    case 'vang-today':
+      return getAggregatedMarketData(company, product);
+  }
+}
+
+/** Backward-compatible SJC entry point for existing consumers. */
+export async function getSjcMarketData(
+  productId: string | null | undefined,
+): Promise<MarketData> {
+  return getMarketData('sjc', productId);
 }
