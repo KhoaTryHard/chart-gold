@@ -10,6 +10,9 @@ import {
   getMarketProducts,
   isMarketProductSelectable,
   MARKET_COMPANIES,
+  presentMarketCatalogText,
+  presentMarketCompany,
+  presentMarketProduct,
 } from '@/lib/market-sources';
 import { getMarketData } from '@/lib/server/sjc';
 
@@ -28,6 +31,7 @@ describe('market source registry', () => {
       'viettin',
       'vgj',
       'btmc',
+      'btmh',
       'phuquy',
       'mihong',
     ]);
@@ -51,6 +55,60 @@ describe('market source registry', () => {
       getMarketProducts('sjc').every((product) => 'officialMatch' in product),
     ).toBe(true);
     expect(getMarketCompany('unknown').id).toBe('sjc');
+    expect(getMarketProducts('btmh')).toHaveLength(11);
+    expect(getMarketProducts('btmh').map((product) => product.id)).toEqual([
+      'btmh-kgb',
+      'btmh-bt-tkc',
+      'btmh-kgbg',
+      'btmh-khs',
+      'btmh-sjc9999',
+      'btmh-9999',
+      'btmh-999',
+      'btmh-bt24k',
+      'btmh-vrtl',
+      'btmh-nl9999',
+      'btmh-nl999',
+    ]);
+    expect(getMarketCompany('btmh')).toMatchObject({
+      name: 'Bảo Tín Mạnh Hải',
+      adapter: 'btmh-official',
+      supportsOfficialQuote: true,
+    });
+    expect(
+      getMarketProducts('btmh')
+        .filter((product) => !isMarketProductSelectable(product))
+        .map((product) => product.id),
+    ).toEqual([
+      'btmh-bt24k',
+      'btmh-vrtl',
+      'btmh-nl9999',
+      'btmh-nl999',
+    ]);
+  });
+
+  it('localizes visible catalog labels without changing source identities', () => {
+    const company = getMarketCompany('pnj');
+    const product = getMarketProduct('phuquy', 'phuquy-ring-9999-05c');
+    const englishCompany = presentMarketCompany(company, 'en');
+    const englishProduct = presentMarketProduct(product, 'en');
+
+    expect(englishCompany.name).toBe('PNJ');
+    expect(englishProduct).toMatchObject({
+      label: 'Gold ring Phú Quý 999.9 · 0.5 chỉ',
+      shortLabel: 'Gold ring Phú Quý 0.5 chỉ',
+      group: 'Gold ring Phú Quý 999.9',
+    });
+    expect(product).toMatchObject({
+      id: 'phuquy-ring-9999-05c',
+      label: 'Nhẫn tròn Phú Quý 999.9 · 0,5 chỉ',
+      group: 'Nhẫn tròn Phú Quý 999.9',
+    });
+    expect(
+      presentMarketCatalogText('Vàng miếng và nhẫn trơn', 'en'),
+    ).toBe('Gold bar and Plain ring');
+    expect(
+      presentMarketCatalogText('Vàng.Today · Bản dự phòng cục bộ', 'en'),
+    ).toBe('Vang.Today · Local fallback data');
   });
 
   it('returns the selected company and source labels for live aggregator data', async () => {
@@ -92,6 +150,98 @@ describe('market source registry', () => {
     expect(market.source.official).toBe(false);
     expect(market.records.at(-1)).toMatchObject({ buy: 145.4, sell: 148.4 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetches BTMH prices from its own first-party GraphQL adapter', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({
+        data: {
+          goldRates: {
+            items: [
+              {
+                code: 'KHS',
+                name: 'Đồng vàng Kim Gia Bảo hoa sen',
+                vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
+                buy_price: 14_020_000,
+                sell_price: 14_420_000,
+                unit: 'VND/1 chỉ',
+                weight: '1 chỉ',
+                last_updated: '2026-09-30 15:20:59.0',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+
+    const market = await getMarketData('btmh', 'btmh-khs', { view: 'quote' });
+    expect(market).toMatchObject({
+      mode: 'live',
+      availability: 'available',
+      company: { id: 'btmh', name: 'Bảo Tín Mạnh Hải' },
+      product: { id: 'btmh-khs', officialKey: 'KHS' },
+      latest: { buy: 140.2, sell: 144.2 },
+      source: { provider: 'Bảo Tín Mạnh Hải official', official: true },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const request = fetcher.mock.calls[0]?.[1] as RequestInit;
+    expect(request.method).toBe('POST');
+    expect(new Headers(request.headers).get('Store')).toBe('/bang-gia-vang');
+    expect(request.body).toEqual(expect.stringContaining('GetBtmhGoldRates'));
+  });
+
+  it('keeps Tiểu Kim Cát at one verified current quote without importing mixed-size history', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({
+        data: {
+          goldRates: {
+            items: [
+              {
+                code: 'BT-TKC',
+                name: 'Tiểu Kim Cát 24K',
+                vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
+                buy_price: 1_399_000,
+                sell_price: 1_442_000,
+                unit: 'VND/0,1 chỉ',
+                weight: '0,1 chỉ',
+                last_updated: '2026-09-30 15:20:59.0',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+
+    const market = await getMarketData('btmh', 'btmh-bt-tkc');
+    expect(market).toMatchObject({
+      mode: 'live',
+      product: { id: 'btmh-bt-tkc' },
+      latest: { buy: 139.9, sell: 144.2 },
+      historySource: {
+        provider: 'Lịch sử Tiểu Kim Cát tích lũy từ ngày tích hợp',
+        url: null,
+      },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fetch or invent a BTMH quote for buy-only catalog lines', async () => {
+    const fetcher = vi.fn(async () => {
+      throw new Error('buy-only row must not trigger an upstream request');
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const market = await getMarketData('btmh', 'btmh-nl9999');
+    expect(market).toMatchObject({
+      mode: 'unavailable',
+      availability: 'unavailable',
+      product: { id: 'btmh-nl9999' },
+      unavailableReason:
+        'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+    });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('does not substitute SJC prices when an external source is unavailable', async () => {

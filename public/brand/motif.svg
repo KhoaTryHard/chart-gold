@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="336" viewBox="0 0 432 336" role="img" aria-labelledby="title"><title id="title">Nét vàng — họa tiết hình học</title><g transform="translate(0 0) scale(1)">
+    <path d="M0 72H432M0 168H432M0 264H432M72 0V336M216 0V336M360 0V336" fill="none" stroke="#DFE1D9"/>
+    <path d="M72 264V72H108V264ZM144 144 216 72H288L180 180ZM144 216 180 180 288 264H216Z" fill="#E8DCC2"/>
+    <g transform="translate(143 75) scale(3.5156)"><g fill="#A78646"><rect x="12" y="12" width="9" height="40" rx="0.8"/><path d="M26 27 41 12H53L33 32Z"/><path d="M26 37 33 32 53 52H41Z"/></g></g>
+    <circle cx="72" cy="72" r="3" fill="#A78646"/><circle cx="360" cy="264" r="3" fill="#A78646"/>
+  </g></svg>

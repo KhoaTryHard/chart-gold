@@ -1,0 +1,17 @@
+# Local environment and generated build files
+.env*
+.wrangler/
+.vinext/
+dist/
+outputs/
+*.tsbuildinfo
+
+# Local QA and documentation are not part of the deployed application
+test-results/
+playwright-report/
+coverage/
+tests/
+docs/
+work/
+scripts/
+*.md

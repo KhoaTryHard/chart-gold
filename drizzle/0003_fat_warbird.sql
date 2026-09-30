@@ -1,0 +1,1 @@
+ALTER TABLE "donation_orders" ADD COLUMN "access_token_hash" varchar(64);

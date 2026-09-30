@@ -78,9 +78,9 @@ describe('Hermes analysis provider', () => {
     expect(normalizeHermesBaseUrl('http://localhost:8642')).toBe(
       'http://localhost:8642/v1',
     );
-    expect(() => normalizeHermesBaseUrl('https://user:pass@hermes.example')).toThrow(
-      'must not include credentials',
-    );
+    expect(() =>
+      normalizeHermesBaseUrl('https://user:pass@hermes.example'),
+    ).toThrow('must not include credentials');
   });
 
   it('requires all gateway configuration without exposing a secret', async () => {
@@ -154,12 +154,29 @@ describe('Hermes analysis provider', () => {
     expect(body.model).toBe('hermes-model');
     expect(body.messages).toEqual([
       expect.objectContaining({ role: 'system' }),
-      { role: 'assistant', content: 'Tóm tắt phiên trước.' },
       { role: 'user', content: 'Giá đang có xu hướng gì?' },
     ]);
     expect(body.stream).toBe(true);
-    expect(body.max_tokens).toBe(900);
+    expect(body.max_tokens).toBe(2000);
     expect(body.stream_options).toEqual({ include_usage: true });
     expect(options).toEqual({ signal: controller.signal });
+  });
+
+  it('addresses the reader as bạn and treats Kim Tuyến as the website brand', async () => {
+    vi.stubEnv('HERMES_BASE_URL', 'https://hermes.example/gateway/v1');
+    vi.stubEnv('HERMES_API_KEY', 'secret-key');
+    vi.stubEnv('HERMES_MODEL', 'hermes-model');
+    mocks.create.mockResolvedValue(
+      chunks({
+        choices: [{ delta: { content: 'Kết quả' } }],
+        usage: null,
+      }),
+    );
+    await collectEvents();
+    const [body] = mocks.create.mock.calls[0];
+    const system = body.messages[0].content as string;
+    expect(system).toContain('Luôn xưng hô với người hỏi là “bạn”');
+    expect(system).toContain('website/thương hiệu Kim Tuyến');
+    expect(system).not.toContain('cho Kim Tuyến.');
   });
 });

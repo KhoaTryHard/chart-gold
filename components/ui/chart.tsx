@@ -45,8 +45,9 @@ function ChartContainer({
   children,
   config,
   initialDimension = INITIAL_DIMENSION,
+  onResize,
   ...props
-}: React.ComponentProps<'div'> & {
+}: Omit<React.ComponentProps<'div'>, 'onResize'> & {
   config: ChartConfig;
   children: React.ComponentProps<
     typeof RechartsPrimitive.ResponsiveContainer
@@ -55,6 +56,7 @@ function ChartContainer({
     width: number;
     height: number;
   };
+  onResize?: (width: number, height: number) => void;
 }) {
   const uniqueId = React.useId();
   const chartId = `chart-${id ?? uniqueId.replace(/:/g, '')}`;
@@ -73,6 +75,7 @@ function ChartContainer({
         <ChartStyle id={chartId} config={config} />
         <RechartsPrimitive.ResponsiveContainer
           initialDimension={initialDimension}
+          onResize={onResize}
         >
           {children}
         </RechartsPrimitive.ResponsiveContainer>
@@ -152,7 +155,7 @@ function ChartTooltipContent({
     }
 
     const [item] = payload;
-    const key = `${labelKey ?? item?.dataKey ?? item?.name ?? 'value'}`;
+    const key = String(labelKey ?? item?.dataKey ?? item?.name ?? 'value');
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
       !labelKey && typeof label === 'string'
@@ -200,7 +203,7 @@ function ChartTooltipContent({
         {payload
           .filter((item) => item.type !== 'none')
           .map((item, index) => {
-            const key = `${nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
+            const key = String(nameKey ?? item.name ?? item.dataKey ?? 'value');
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
@@ -299,7 +302,7 @@ function ChartLegendContent({
       {payload
         .filter((item) => item.type !== 'none')
         .map((item, index) => {
-          const key = `${nameKey ?? item.dataKey ?? 'value'}`;
+          const key = String(nameKey ?? item.dataKey ?? 'value');
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (

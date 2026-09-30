@@ -1,0 +1,190 @@
+{
+  "brand": "Kim Tuyến",
+  "concept": "Nét vàng",
+  "palette": {
+    "ink": "#20251F",
+    "gold": "#A78646",
+    "ivory": "#F7F6F2",
+    "muted": "#73796F",
+    "softgold": "#E8DCC2",
+    "lightgold": "#D9BD80",
+    "line": "#DFE1D9",
+    "darkline": "#42473C"
+  },
+  "source": "scripts/generate-brand-assets.mjs",
+  "typeface": "Geist Regular, bundled with Next.js; SVG lettering is outlined",
+  "generatedAssets": [
+    {
+      "file": "/brand/mark-primary.svg",
+      "width": 64,
+      "height": 64,
+      "description": "Kim Tuyến — biểu trưng primary"
+    },
+    {
+      "file": "/brand/logo-primary.svg",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo primary"
+    },
+    {
+      "file": "/brand/logo-primary.png",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo primary"
+    },
+    {
+      "file": "/brand/mark-reverse.svg",
+      "width": 64,
+      "height": 64,
+      "description": "Kim Tuyến — biểu trưng reverse"
+    },
+    {
+      "file": "/brand/logo-reverse.svg",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo reverse"
+    },
+    {
+      "file": "/brand/logo-reverse.png",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo reverse"
+    },
+    {
+      "file": "/brand/mark-mono.svg",
+      "width": 64,
+      "height": 64,
+      "description": "Kim Tuyến — biểu trưng mono"
+    },
+    {
+      "file": "/brand/logo-mono.svg",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo mono"
+    },
+    {
+      "file": "/brand/logo-mono.png",
+      "width": 360,
+      "height": 88,
+      "description": "Kim Tuyến — logo mono"
+    },
+    {
+      "file": "/brand/avatar.svg",
+      "width": 64,
+      "height": 64,
+      "description": "Biểu tượng ứng dụng nền mực"
+    },
+    {
+      "file": "/brand/avatar.png",
+      "width": 512,
+      "height": 512,
+      "description": "Ảnh đại diện"
+    },
+    {
+      "file": "/brand/icon-192.png",
+      "width": 192,
+      "height": 192,
+      "purpose": "any",
+      "description": "Biểu tượng PWA"
+    },
+    {
+      "file": "/brand/icon-maskable-192.png",
+      "width": 192,
+      "height": 192,
+      "purpose": "maskable",
+      "description": "Biểu tượng PWA"
+    },
+    {
+      "file": "/brand/icon-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "any",
+      "description": "Biểu tượng PWA"
+    },
+    {
+      "file": "/brand/icon-maskable-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "maskable",
+      "description": "Biểu tượng PWA"
+    },
+    {
+      "file": "/brand/banner-market.svg",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Bảng giá vàng"
+    },
+    {
+      "file": "/brand/banner-market.png",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Bảng giá vàng"
+    },
+    {
+      "file": "/brand/banner-editorial.svg",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Nhịp vàng"
+    },
+    {
+      "file": "/brand/banner-editorial.png",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Nhịp vàng"
+    },
+    {
+      "file": "/brand/banner-tools.svg",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Công cụ vàng"
+    },
+    {
+      "file": "/brand/banner-tools.png",
+      "width": 1600,
+      "height": 560,
+      "description": "Kim Tuyến — banner Công cụ vàng"
+    },
+    {
+      "file": "/brand/social-card.svg",
+      "width": 1200,
+      "height": 630,
+      "description": "Kim Tuyến — giá vàng rõ ràng, góc nhìn vững vàng"
+    },
+    {
+      "file": "/brand/social-card.png",
+      "width": 1200,
+      "height": 630,
+      "description": "Kim Tuyến — giá vàng rõ ràng, góc nhìn vững vàng"
+    },
+    {
+      "file": "/brand/social-square.svg",
+      "width": 1080,
+      "height": 1080,
+      "description": "Kim Tuyến — giá vàng và góc nhìn"
+    },
+    {
+      "file": "/brand/social-square.png",
+      "width": 1080,
+      "height": 1080,
+      "description": "Kim Tuyến — giá vàng và góc nhìn"
+    },
+    {
+      "file": "/brand/motif.svg",
+      "width": 432,
+      "height": 336,
+      "description": "Nét vàng — họa tiết hình học"
+    },
+    {
+      "file": "/brand/pattern.svg",
+      "width": 640,
+      "height": 320,
+      "description": "Nét vàng — nền họa tiết liền mạch"
+    }
+  ],
+  "rootAssets": [
+    "/favicon.svg",
+    "/favicon.ico",
+    "/apple-touch-icon.png",
+    "/og.png"
+  ]
+}

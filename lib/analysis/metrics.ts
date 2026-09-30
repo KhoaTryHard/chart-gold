@@ -1,4 +1,5 @@
 import type { PricePoint } from '@/lib/server/sjc';
+import { shiftDate } from '@/lib/analysis/dates';
 
 export const ANALYSIS_RANGES = {
   '7N': 7,
@@ -67,15 +68,33 @@ export function calculateAnalysisMetrics(
   records: readonly PricePoint[],
   range: AnalysisRange,
 ): AnalysisMetrics {
-  const sorted = [...records].sort((left, right) =>
-    left.date.localeCompare(right.date),
-  );
-  const selected = sorted.slice(-ANALYSIS_RANGES[range]);
+  const sorted = [
+    ...new Map(
+      records
+        .filter(
+          (point) =>
+            /^\d{4}-\d{2}-\d{2}$/.test(point.date) &&
+            Number.isFinite(point.buy) &&
+            Number.isFinite(point.sell) &&
+            point.buy > 0 &&
+            point.sell >= point.buy,
+        )
+        .map((point) => [point.date, point]),
+    ).values(),
+  ].sort((left, right) => left.date.localeCompare(right.date));
+  const endDate = sorted.at(-1)?.date;
+  const startDate = endDate
+    ? shiftDate(endDate, 1 - ANALYSIS_RANGES[range])
+    : '';
+  const selected = sorted.filter((point) => point.date >= startDate);
   const latest = selected.at(-1) ?? sorted.at(-1);
-  const previous = selected.at(-2) ?? sorted.at(-2);
+  const previous = latest
+    ? sorted.find((point) => point.date === shiftDate(latest.date, -1))
+    : undefined;
   const first = selected[0];
   const sellValues = selected.map((point) => point.sell);
   const dailyReturns = selected.slice(1).flatMap((point, index) => {
+    if (selected[index].date !== shiftDate(point.date, -1)) return [];
     const prior = selected[index].sell;
     return prior ? [(point.sell - prior) / prior] : [];
   });
@@ -118,8 +137,18 @@ export function calculateAnalysisMetrics(
       returnPercent: percentChange(first?.sell, latest?.sell),
     },
     movingAverage: {
-      ma7: average(sorted.slice(-7).map((point) => point.sell)),
-      ma30: average(sorted.slice(-30).map((point) => point.sell)),
+      ma7:
+        endDate &&
+        sorted.filter((point) => point.date >= shiftDate(endDate, -6))
+          .length === 7
+          ? average(sorted.slice(-7).map((point) => point.sell))
+          : null,
+      ma30:
+        endDate &&
+        sorted.filter((point) => point.date >= shiftDate(endDate, -29))
+          .length === 30
+          ? average(sorted.slice(-30).map((point) => point.sell))
+          : null,
     },
     highLow: {
       high: sellValues.length ? round(Math.max(...sellValues)) : null,

@@ -1,4 +1,9 @@
 import 'server-only';
+import {
+  marketFetch as fetch,
+  marketHistoryDays,
+  isAnalysisFetch,
+} from '@/lib/server/market-fetch';
 
 import fallbackDataset from '@/lib/sjc-data.json';
 import {
@@ -7,6 +12,7 @@ import {
   type PnjProduct,
 } from '@/lib/server/pnj';
 import { getVgjMarketData } from '@/lib/server/vgj';
+import { getBtmhMarketData } from '@/lib/server/btmh';
 import type { SjcProduct } from '@/lib/sjc-products';
 import {
   getMarketCompany,
@@ -24,6 +30,7 @@ export type PricePoint = {
 };
 
 type LiveQuote = {
+  timestampKind?: 'source' | 'retrieval-or-date';
   buy: number;
   sell: number;
   observedAt: string;
@@ -39,6 +46,7 @@ export type MarketDataMode = 'live' | 'delayed' | 'fallback' | 'unavailable';
 export type MarketAvailability = 'available' | 'unavailable';
 
 export type MarketData = {
+  timestampKind?: 'source' | 'retrieval-or-date';
   mode: MarketDataMode;
   availability: MarketAvailability;
   unavailableReason: string | null;
@@ -51,11 +59,21 @@ export type MarketData = {
   source: { provider: string; url: string | null; official: boolean };
   historySource: { provider: string; url: string | null };
   generatedAt: string;
+  /** Time the application fetched or generated this normalized record. */
+  fetchedAt?: string;
+  /** Upstream publication time when the source explicitly provides one. */
+  sourcePublishedAt?: string;
+};
+
+export type MarketDataView = 'full' | 'quote' | 'history';
+export type MarketDataOptions = {
+  view?: MarketDataView;
+  historyDays?: number;
 };
 
 const OFFICIAL_SJC_URL = 'https://sjc.com.vn/xml/tygiavang.xml';
 const VANG_TODAY_API = 'https://www.vang.today/api/prices';
-const HISTORY_CSV_URL =
+export const SJC_HISTORY_CSV_URL =
   'https://raw.githubusercontent.com/vkhuy/SJC-price/main/docs/data/sjc_final.csv';
 const VANG_TODAY_HISTORY_DAYS = 30;
 const BTMC_GOLD_DATE_API = 'https://btmc.vn/ProductHome/getGoldDate';
@@ -293,9 +311,10 @@ function parsePhuQuyQuoteFromHtml(
 
 async function fetchPhuQuyHistory(
   product: PhuQuyProduct,
+  requestedDays?: number,
 ): Promise<PricePoint[]> {
   if (!product.officialMatch) return [];
-  const dates = previousDates(OFFICIAL_HISTORY_DAYS);
+  const dates = previousDates(requestedDays ?? marketHistoryDays(OFFICIAL_HISTORY_DAYS));
   const responses = await Promise.allSettled(
     dates.map(async (date) => {
       const html = await fetchPhuQuyHistoryHtml(date);
@@ -322,7 +341,7 @@ async function fetchBtmcHistoryPayload(
   const cached = btmcHistoryPayloadCache.get(date);
   if (cached && cached.expiresAt > Date.now()) return cached.payload;
   const existing = btmcHistoryPayloadInFlight.get(date);
-  if (existing) return existing;
+  if (existing && !isAnalysisFetch()) return existing;
 
   const [year, month, day] = date.split('-');
   const btmcDate = `${day}/${month}/${year}`;
@@ -354,7 +373,7 @@ async function fetchPhuQuyHistoryHtml(date: string): Promise<string> {
   const cached = phuQuyHistoryHtmlCache.get(date);
   if (cached && cached.expiresAt > Date.now()) return cached.html;
   const existing = phuQuyHistoryHtmlInFlight.get(date);
-  if (existing) return existing;
+  if (existing && !isAnalysisFetch()) return existing;
 
   const url = `${PHU_QUY_HISTORY_PAGE}?date=${encodeURIComponent(date)}`;
   const pending = fetch(url, {
@@ -450,12 +469,14 @@ async function fetchBtmcQuote(
   };
 }
 
-async function fetchBtmcHistory(product: BtmcProduct): Promise<PricePoint[]> {
+async function fetchBtmcHistory(product: BtmcProduct, requestedDays?: number): Promise<PricePoint[]> {
   const responses = await Promise.allSettled(
-    previousDates(OFFICIAL_HISTORY_DAYS).map(async (date) => {
-      const quote = await fetchBtmcQuote(product, date);
-      return toPoint(date, quote.buy, quote.sell);
-    }),
+    previousDates(requestedDays ?? marketHistoryDays(OFFICIAL_HISTORY_DAYS)).map(
+      async (date) => {
+        const quote = await fetchBtmcQuote(product, date);
+        return toPoint(date, quote.buy, quote.sell);
+      },
+    ),
   );
   return responses.flatMap((result) =>
     result.status === 'fulfilled' ? [result.value] : [],
@@ -467,19 +488,22 @@ async function getFirstPartyMarketData(
   product: BtmcProduct | PhuQuyProduct,
   fetchQuote: () => Promise<LiveQuote>,
   fetchHistory: () => Promise<PricePoint[]>,
-  options: { loadHistoryWhenQuoteUnavailable?: boolean } = {},
+  options: MarketDataOptions & { loadHistoryWhenQuoteUnavailable?: boolean } = {},
 ): Promise<MarketData> {
+  const view = options.view ?? 'full';
   // Fetch the live quote first. Official history endpoints are one-date-per-
   // request and may be slow; a history timeout must never hide a live quote.
   let quote: LiveQuote | null = null;
-  try {
-    quote = await fetchQuote();
-  } catch {
+  if (view !== 'history') {
+    try {
+      quote = await fetchQuote();
+    } catch {
     // A delayed official history point may still be useful when today's quote
     // is temporarily unavailable, so continue with the best-effort history.
+    }
   }
   let history: PricePoint[] = [];
-  if (quote || options.loadHistoryWhenQuoteUnavailable !== false) {
+  if (view !== 'quote' && (quote || options.loadHistoryWhenQuoteUnavailable !== false)) {
     try {
       history = await fetchHistory();
     } catch {
@@ -494,7 +518,7 @@ async function getFirstPartyMarketData(
   }
   const records = [...merged.values()]
     .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(-company.maxHistoryDays);
+    .slice(-(options.historyDays ?? company.maxHistoryDays));
   const latest = records.at(-1) ?? null;
   if (!latest) {
     return unavailableMarketData(
@@ -538,9 +562,17 @@ async function getCachedFirstPartyMarketData(
   product: BtmcProduct | PhuQuyProduct,
   fetchQuote: () => Promise<LiveQuote>,
   fetchHistory: () => Promise<PricePoint[]>,
-  options: { loadHistoryWhenQuoteUnavailable?: boolean } = {},
+  options: MarketDataOptions & { loadHistoryWhenQuoteUnavailable?: boolean } = {},
 ) {
-  const key = `${company.id}:${product.id}`;
+  const key = `${company.id}:${product.id}:${options.view ?? 'full'}:${options.historyDays ?? 'default'}`;
+  if (isAnalysisFetch())
+    return getFirstPartyMarketData(
+      company,
+      product,
+      fetchQuote,
+      fetchHistory,
+      options,
+    );
   const cached = firstPartyMarketCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
 
@@ -571,15 +603,16 @@ async function getCachedFirstPartyMarketData(
 async function getBtmcWithFallback(
   company: ReturnType<typeof getMarketCompany>,
   product: BtmcProduct,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
   const official = await getCachedFirstPartyMarketData(
     company,
     product,
     () => fetchBtmcCurrentQuote(product),
-    () => fetchBtmcHistory(product),
+    () => fetchBtmcHistory(product, options.historyDays),
     // Do not spend another seven upstream timeouts before trying the known,
     // exact Vang.Today code when today's official page is unavailable.
-    { loadHistoryWhenQuoteUnavailable: false },
+    { ...options, loadHistoryWhenQuoteUnavailable: false },
   );
   if (official.availability === 'available') return official;
 
@@ -594,6 +627,7 @@ async function getBtmcWithFallback(
     product,
     fallbackCode,
     'Vang.Today aggregator (BTMC fallback)',
+    options,
   );
 }
 
@@ -628,6 +662,7 @@ async function fetchAggregatedQuote(
     observedAt: payload.timestamp
       ? new Date(payload.timestamp * 1_000).toISOString()
       : new Date().toISOString(),
+    timestampKind: payload.timestamp ? 'source' : 'retrieval-or-date',
     provider: 'Vàng.Today',
     providerUrl: 'https://www.vang.today/vi/api',
   };
@@ -636,12 +671,14 @@ async function fetchAggregatedQuote(
 async function fetchProductHistory(
   product: MarketProduct,
   upstreamCodeOverride?: string,
+  requestedDays?: number,
 ): Promise<PricePoint[]> {
   const upstreamCode = upstreamCodeOverride ?? product.upstreamCode;
   if (!upstreamCode) return [];
   // Vang.Today documents a maximum of 30 calendar days. Keep the adapter
   // inside that contract instead of implying a longer history exists.
-  const url = `${VANG_TODAY_API}?type=${upstreamCode}&days=${VANG_TODAY_HISTORY_DAYS}`;
+  const days = requestedDays ?? marketHistoryDays(VANG_TODAY_HISTORY_DAYS);
+  const url = `${VANG_TODAY_API}?type=${upstreamCode}&days=${Math.max(2, Math.min(VANG_TODAY_HISTORY_DAYS, days))}`;
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: timeoutSignal(),
@@ -667,8 +704,8 @@ async function fetchProductHistory(
   });
 }
 
-async function fetchHistoricalCsv(): Promise<PricePoint[]> {
-  const response = await fetch(HISTORY_CSV_URL, {
+export async function fetchSjcHistoricalCsv(): Promise<PricePoint[]> {
+  const response = await fetch(SJC_HISTORY_CSV_URL, {
     headers: { Accept: 'text/csv' },
     signal: timeoutSignal(),
   });
@@ -687,18 +724,23 @@ async function fetchHistoricalCsv(): Promise<PricePoint[]> {
 
 async function getSjcMarketDataInternal(
   product: SjcProduct,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
   const company = getMarketCompany('sjc');
+  const view = options.view ?? 'full';
+  const requestedDays = Math.max(2, Math.min(365, options.historyDays ?? marketHistoryDays(365)));
   const [
     officialResult,
     aggregateResult,
     productHistoryResult,
     barHistoryResult,
   ] = await Promise.allSettled([
-    fetchOfficialQuote(product),
-    fetchAggregatedQuote(product),
-    fetchProductHistory(product),
-    product.seriesId === 'bar' ? fetchHistoricalCsv() : Promise.resolve([]),
+    view === 'history' ? Promise.resolve(null) : fetchOfficialQuote(product),
+    view === 'history' ? Promise.resolve(null) : fetchAggregatedQuote(product),
+    view === 'quote' ? Promise.resolve([]) : fetchProductHistory(product, undefined, requestedDays),
+    view === 'full' && product.seriesId === 'bar' && marketHistoryDays(365) > 2
+      ? fetchSjcHistoricalCsv()
+      : Promise.resolve([]),
   ]);
 
   const official =
@@ -718,7 +760,7 @@ async function getSjcMarketDataInternal(
   const baseHistory =
     barHistory.length > 0
       ? barHistory
-      : product.seriesId === 'bar'
+      : view === 'full' && product.seriesId === 'bar' && marketHistoryDays(365) > 2
         ? localBarFallback
         : [];
   for (const point of baseHistory) merged.set(point.date, point);
@@ -730,16 +772,27 @@ async function getSjcMarketDataInternal(
 
   const records = [...merged.values()]
     .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(-365);
+    .slice(-(view === 'history' ? requestedDays : 365));
   const latest = records.at(-1) ?? null;
   const mode: MarketDataMode = liveQuote
     ? 'live'
     : productHistory.length || barHistory.length
       ? 'delayed'
-      : 'fallback';
+      : view === 'quote'
+        ? 'unavailable'
+        : 'fallback';
+
+  if (!latest && view === 'quote') {
+    return unavailableMarketData(
+      company,
+      product,
+      'Nguồn giá hiện chưa phản hồi cho sản phẩm này.',
+    );
+  }
 
   return {
     mode,
+    timestampKind: liveQuote?.timestampKind ?? 'retrieval-or-date',
     availability: 'available',
     unavailableReason: null,
     company,
@@ -818,10 +871,12 @@ async function getAggregatedMarketData(
   product: MarketProduct,
   upstreamCodeOverride?: string,
   providerLabel = 'Vang.Today aggregator',
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
+  const view = options.view ?? 'full';
   const [quoteResult, historyResult] = await Promise.allSettled([
-    fetchAggregatedQuote(product, upstreamCodeOverride),
-    fetchProductHistory(product, upstreamCodeOverride),
+    view === 'history' ? Promise.resolve(null) : fetchAggregatedQuote(product, upstreamCodeOverride),
+    view === 'quote' ? Promise.resolve([]) : fetchProductHistory(product, upstreamCodeOverride, options.historyDays),
   ]);
   const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
   const history =
@@ -853,6 +908,7 @@ async function getAggregatedMarketData(
     records,
     latest,
     observedAt: quote?.observedAt ?? `${latest.date}T00:00:00+07:00`,
+    timestampKind: quote?.timestampKind ?? 'retrieval-or-date',
     source: quote
       ? {
           provider: providerLabel,
@@ -876,25 +932,30 @@ async function getAggregatedMarketData(
 export async function getMarketData(
   companyId: string | null | undefined,
   productId: string | null | undefined,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
   const company = getMarketCompany(companyId);
   const product = getMarketProduct(company.id, productId);
+  const result = await (async () => {
   switch (company.adapter) {
     case 'sjc-official':
-      return getSjcMarketDataInternal(product as SjcProduct);
+      return getSjcMarketDataInternal(product as SjcProduct, options);
     case 'pnj-official':
-      return getPnjMarketData(company as PnjCompany, product as PnjProduct);
+      return getPnjMarketData(company as PnjCompany, product as PnjProduct, options);
     case 'btmc-official':
-      return getBtmcWithFallback(company, product as BtmcProduct);
+      return getBtmcWithFallback(company, product as BtmcProduct, options);
+    case 'btmh-official':
+      return getBtmhMarketData(product.id, options);
     case 'phuquy-official':
       return getCachedFirstPartyMarketData(
         company,
         product as PhuQuyProduct,
         () => fetchPhuQuyQuote(product as PhuQuyProduct),
-        () => fetchPhuQuyHistory(product as PhuQuyProduct),
+        () => fetchPhuQuyHistory(product as PhuQuyProduct, options.historyDays),
+        options,
       );
     case 'vgj-official':
-      return getVgjMarketData(product.id);
+      return getVgjMarketData(product.id, options);
     case 'unavailable':
       return unavailableMarketData(
         company,
@@ -902,8 +963,16 @@ export async function getMarketData(
         'Chưa có endpoint Mi Hồng hoạt động và đã xác minh. Không hiển thị giá từ nguồn tổng hợp không kiểm chứng.',
       );
     case 'vang-today':
-      return getAggregatedMarketData(company, product);
+      return getAggregatedMarketData(company, product, undefined, 'Vang.Today aggregator', options);
   }
+  })();
+  return {
+    ...result,
+    fetchedAt: result.fetchedAt ?? result.generatedAt,
+    sourcePublishedAt:
+      result.sourcePublishedAt ??
+      (result.timestampKind === 'source' ? result.observedAt : undefined),
+  };
 }
 
 /** Backward-compatible SJC entry point for existing consumers. */

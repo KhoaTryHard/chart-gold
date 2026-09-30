@@ -1,6 +1,11 @@
 import 'server-only';
+import {
+  marketFetch as fetch,
+  marketHistoryDays,
+  isAnalysisFetch,
+} from '@/lib/server/market-fetch';
 
-import type { MarketData, PricePoint } from '@/lib/server/sjc';
+import type { MarketData, MarketDataOptions, PricePoint } from '@/lib/server/sjc';
 import {
   getMarketProducts,
   type AggregatedMarketProduct,
@@ -34,7 +39,7 @@ type PnjCurrentPayload = {
   }>;
 };
 
-type PnjHistoryPayload = {
+export type PnjHistoryPayload = {
   locations?: Array<{
     name?: string;
     gold_type?: Array<PnjPriceRow & { data?: PnjPriceRow[] }>;
@@ -43,7 +48,18 @@ type PnjHistoryPayload = {
 
 type PnjHistoryRow = PnjPriceRow & { data?: PnjPriceRow[] };
 
+export class PnjHistoryFetchError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterMs: number | null,
+  ) {
+    super(message);
+  }
+}
+
 type LiveQuote = {
+  timestampKind?: 'source' | 'retrieval-or-date';
   buy: number;
   sell: number;
   observedAt: string;
@@ -103,9 +119,7 @@ export function parsePnjTimestamp(value: string | null | undefined) {
   if (!value) return null;
   const match = value
     .trim()
-    .match(
-      /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/,
-    );
+    .match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (match) {
     const [, day, month, year, hour, minute, second = '00'] = match;
     return `${year}-${month}-${day}T${hour}:${minute}:${second}+07:00`;
@@ -154,6 +168,9 @@ export function parsePnjCurrentQuote(
     buy,
     sell,
     observedAt: parsePnjTimestamp(row?.updated_at) ?? fallbackObservedAt,
+    timestampKind: parsePnjTimestamp(row?.updated_at)
+      ? 'source'
+      : 'retrieval-or-date',
     provider: 'PNJ official',
     providerUrl: PNJ_GOLD_PRICE_URL,
   };
@@ -164,27 +181,44 @@ export function parsePnjCurrentQuote(
  * The API returns all products in one response, so history requests are shared
  * across every PNJ filter in the dashboard.
  */
+export function parsePnjHistoryEntry(
+  payload: PnjHistoryPayload,
+  product: PnjProduct,
+  date: string,
+): { point: PricePoint; observedAt: string; raw: PnjPriceRow } | null {
+  const data = getHistoryRow(payload, product)?.data ?? [];
+  const candidates: Array<{
+    point: PricePoint;
+    observedAt: string;
+    raw: PnjPriceRow;
+  }> =
+    data.flatMap((row) => {
+      const buy = parsePrice(row.gia_mua);
+      const sell = parsePrice(row.gia_ban);
+      if (buy === null || sell === null || !isValidPrice(buy, sell)) return [];
+      const observedAt =
+        parsePnjTimestamp(row.updated_at) ?? `${date}T12:00:00+07:00`;
+      if (observedAt.slice(0, 10) !== date) return [];
+      return [
+        {
+          point: toPoint(date, buy, sell),
+          observedAt,
+          raw: row,
+        },
+      ];
+    });
+  candidates.sort((left, right) =>
+    left.observedAt.localeCompare(right.observedAt),
+  );
+  return candidates.at(-1) ?? null;
+}
+
 export function parsePnjHistoryPoint(
   payload: PnjHistoryPayload,
   product: PnjProduct,
   date: string,
 ): PricePoint | null {
-  const data = getHistoryRow(payload, product)?.data ?? [];
-  const candidates: Array<{ point: PricePoint; observedAt: string }> = data.flatMap(
-    (row) => {
-    const buy = parsePrice(row.gia_mua);
-    const sell = parsePrice(row.gia_ban);
-    if (buy === null || sell === null || !isValidPrice(buy, sell)) return [];
-    return [
-      {
-        point: toPoint(date, buy, sell),
-        observedAt: parsePnjTimestamp(row.updated_at) ?? `${date}T12:00:00+07:00`,
-      },
-    ];
-    },
-  );
-  candidates.sort((left, right) => left.observedAt.localeCompare(right.observedAt));
-  return candidates.at(-1)?.point ?? null;
+  return parsePnjHistoryEntry(payload, product, date)?.point ?? null;
 }
 
 async function fetchPnjCurrentQuote(product: PnjProduct): Promise<LiveQuote> {
@@ -202,11 +236,11 @@ async function fetchPnjCurrentQuote(product: PnjProduct): Promise<LiveQuote> {
   );
 }
 
-async function fetchPnjHistoryPayload(date: string) {
+export async function fetchPnjHistoryPayload(date: string) {
   const cached = historyCache.get(date);
   if (cached && cached.expiresAt > Date.now()) return cached.payload;
   const existing = historyInFlight.get(date);
-  if (existing) return existing;
+  if (existing && !isAnalysisFetch()) return existing;
 
   const dateToken = date.replace(/-/g, '');
   const url = `${PNJ_GOLD_HISTORY_URL}?date=${encodeURIComponent(dateToken)}`;
@@ -218,7 +252,19 @@ async function fetchPnjHistoryPayload(date: string) {
     signal: timeoutSignal(),
   })
     .then(async (response) => {
-      if (!response.ok) throw new Error(`PNJ history upstream ${response.status}`);
+      if (!response.ok) {
+        const retryAfter = response.headers.get('retry-after');
+        const retryAfterMs = retryAfter
+          ? Math.max(0, Number(retryAfter) * 1_000) || null
+          : response.status === 429
+            ? 60_000
+            : null;
+        throw new PnjHistoryFetchError(
+          `PNJ history upstream ${response.status}`,
+          response.status,
+          retryAfterMs,
+        );
+      }
       const payload = (await response.json()) as PnjHistoryPayload;
       historyCache.set(date, {
         payload,
@@ -258,8 +304,13 @@ function previousDates(days: number) {
 async function fetchPnjHistory(
   product: PnjProduct,
   maxHistoryDays: number,
+  requestedDays?: number,
 ): Promise<PricePoint[]> {
-  const dates = previousDates(Math.max(0, maxHistoryDays - 1));
+  const dates = previousDates(
+    requestedDays === undefined
+      ? marketHistoryDays(Math.max(0, maxHistoryDays - 1))
+      : Math.max(0, Math.min(maxHistoryDays - 1, requestedDays - 1)),
+  );
   const responses = await Promise.allSettled(
     dates.map(async (date) => {
       const payload = await fetchPnjHistoryPayload(date);
@@ -304,20 +355,26 @@ function unavailableMarketData(
 async function loadPnjMarketData(
   company: PnjCompany,
   product: PnjProduct,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
+  const view = options.view ?? 'full';
   let quote: LiveQuote | null = null;
-  try {
-    quote = await fetchPnjCurrentQuote(product);
-  } catch {
+  if (view !== 'history') {
+    try {
+      quote = await fetchPnjCurrentQuote(product);
+    } catch {
     // Keep trying the official history endpoint if only the live snapshot is
     // temporarily unavailable.
+    }
   }
 
   let history: PricePoint[] = [];
-  try {
-    history = await fetchPnjHistory(product, company.maxHistoryDays);
-  } catch {
+  if (view !== 'quote') {
+    try {
+      history = await fetchPnjHistory(product, company.maxHistoryDays, options.historyDays);
+    } catch {
     // A live quote remains useful when a date-specific history request fails.
+    }
   }
 
   const merged = new Map<string, PricePoint>();
@@ -328,7 +385,7 @@ async function loadPnjMarketData(
   }
   const records = [...merged.values()]
     .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(-company.maxHistoryDays);
+    .slice(-(options.historyDays ?? company.maxHistoryDays));
   const latest = records.at(-1) ?? null;
   if (!latest) {
     return unavailableMarketData(
@@ -348,6 +405,7 @@ async function loadPnjMarketData(
     records,
     latest,
     observedAt: quote?.observedAt ?? `${latest.date}T12:00:00+07:00`,
+    timestampKind: quote?.timestampKind ?? 'retrieval-or-date',
     source: quote
       ? {
           provider: quote.provider,
@@ -371,13 +429,15 @@ async function loadPnjMarketData(
 export async function getPnjMarketData(
   company: PnjCompany,
   product: PnjProduct,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
-  const key = `${company.id}:${product.id}`;
+  const key = `${company.id}:${product.id}:${options.view ?? 'full'}:${options.historyDays ?? 'default'}`;
+  if (isAnalysisFetch()) return loadPnjMarketData(company, product, options);
   const cached = marketCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
   const existing = marketInFlight.get(key);
   if (existing) return existing;
-  const pending = loadPnjMarketData(company, product)
+  const pending = loadPnjMarketData(company, product, options)
     .then((data) => {
       marketCache.set(key, {
         data,

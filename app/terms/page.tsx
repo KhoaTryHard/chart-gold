@@ -1,86 +1,19 @@
-import type { Metadata } from 'next';
 import { ExternalLink } from 'lucide-react';
-
 import { LegalPage } from '@/components/legal-page';
+import { getRequestLocale } from '@/lib/request-locale';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Điều khoản sử dụng — Kim Tuyến',
-  description:
-    'Điều khoản sử dụng dashboard giá vàng SJC và Phân tích AI của Kim Tuyến.',
-};
+export const metadata = pageMetadata('/terms', 'Điều khoản sử dụng', 'Điều khoản sử dụng dashboard giá vàng và Phân tích AI của Kim Tuyến.');
 
-export default function TermsPage() {
-  return (
-    <LegalPage
-      eyebrow="Kim Tuyến · Sử dụng dịch vụ"
-      title="Điều khoản sử dụng"
-      intro="Các điều khoản dưới đây giúp làm rõ phạm vi của dashboard giá vàng SJC và khu vực Phân tích AI."
-    >
-      <section>
-        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-          1. Dashboard công khai
-        </h2>
-        <p className="mt-2 text-muted-foreground">
-          Kim Tuyến cung cấp biểu đồ và chỉ số tham khảo từ dữ liệu giá SJC,
-          cùng các liên kết để đối chiếu nguồn. Dữ liệu có thể được cập nhật
-          chậm, tạm thời không khả dụng hoặc hiển thị bản dự phòng; hãy kiểm tra
-          nguồn chính thức trước khi sử dụng.
-        </p>
-      </section>
-
-      <section>
-        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-          2. Phân tích AI dành cho quản trị viên
-        </h2>
-        <p className="mt-2 text-muted-foreground">
-          Phân tích AI chỉ dành cho tài khoản quản trị nằm trong allowlist và
-          đăng nhập bằng Google. Bạn không được cố gắng vượt qua bước đăng nhập,
-          kiểm tra quyền hoặc giới hạn kỹ thuật của dịch vụ.
-        </p>
-      </section>
-
-      <section>
-        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-          3. Tính chất tham khảo
-        </h2>
-        <p className="mt-2 text-muted-foreground">
-          Biểu đồ, tín hiệu xu hướng, nguồn liên kết và câu trả lời AI chỉ có
-          mục đích thông tin, không phải tư vấn đầu tư, tư vấn tài chính hay lời
-          đề nghị mua bán. Kim Tuyến không cam kết rằng dữ liệu, dự báo hoặc
-          phản hồi AI luôn đầy đủ, chính xác, kịp thời hay phù hợp với hoàn cảnh
-          của bạn. Bạn tự đánh giá thông tin và tự chịu trách nhiệm cho quyết
-          định của mình.
-        </p>
-      </section>
-
-      <section>
-        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-          4. Nhà cung cấp và liên kết bên ngoài
-        </h2>
-        <p className="mt-2 flex items-start gap-2 text-muted-foreground">
-          Dữ liệu giá và nguồn tham khảo có thể đến từ các trang bên ngoài.
-          Gemini được gọi ở phía máy chủ cho Phân tích AI theo cấu hình triển
-          khai. Các dịch vụ bên ngoài có điều khoản và chính sách riêng; hãy xem
-          xét chúng trước khi mở liên kết hoặc cung cấp thông tin.
-          <ExternalLink className="mt-1 size-3.5 shrink-0" />
-        </p>
-      </section>
-
-      <section>
-        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-          5. Liên hệ
-        </h2>
-        <p className="mt-2 text-muted-foreground">
-          Góp ý hoặc câu hỏi về dịch vụ:
-          <a
-            href="mailto:khoadangntpcl@gmail.com"
-            className="ml-1 font-semibold text-foreground underline-offset-4 hover:underline"
-          >
-            khoadangntpcl@gmail.com
-          </a>
-          .
-        </p>
-      </section>
-    </LegalPage>
-  );
+export default async function TermsPage() {
+  const english = (await getRequestLocale()) === 'en';
+  return <LegalPage eyebrow={english ? 'Kim Tuyến · Service use' : 'Kim Tuyến · Sử dụng dịch vụ'} title={english ? 'Terms of use' : 'Điều khoản sử dụng'} intro={english ? 'These terms describe the scope of the price table, account Gold Ledger, Gold Pulse, Gold Tools, and AI Analysis.' : 'Các điều khoản dưới đây làm rõ phạm vi bảng giá vàng, Sổ vàng theo tài khoản, Nhịp vàng, Công cụ vàng và Phân tích AI.'} updatedAt="29/09/2026" locale={english ? 'en' : 'vi'}>
+    <section><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '1. Public dashboard' : '1. Dashboard công khai'}</h2><p className="mt-2 text-muted-foreground">{english ? 'Kim Tuyến provides reference price tables, charts, and indicators from multiple gold dealers, together with links to check their sources. Data can be delayed, temporarily unavailable, or shown as fallback data; check the official source before relying on it.' : 'Kim Tuyến cung cấp bảng giá, biểu đồ và chỉ số tham khảo từ dữ liệu nhiều thương hiệu vàng, cùng các liên kết để đối chiếu nguồn. Dữ liệu có thể được cập nhật chậm, tạm thời không khả dụng hoặc hiển thị bản dự phòng; hãy kiểm tra nguồn chính thức trước khi sử dụng.'}</p></section>
+    <section><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '2. AI Analysis and subscriptions' : '2. Phân tích AI và thuê bao'}</h2><p className="mt-2 text-muted-foreground">{english ? 'The community beta offers three completed analyses per Vietnam calendar month. The first paid beta is one Plus plan at 99,000 VND for 30 days and 20 completed analyses; it has no automatic renewal. The server determines quota, capability, and expiry. Administrators have unlimited operational access. You must not attempt to bypass sign-in, access checks, or service limits.' : 'Beta cộng đồng cung cấp ba lượt phân tích hoàn tất theo tháng lịch Việt Nam. Beta trả phí đầu tiên chỉ có một gói Plus giá 99.000 đồng trong 30 ngày với 20 lượt phân tích hoàn tất và không tự động gia hạn. Máy chủ quyết định quota, capability và thời hạn. Tài khoản quản trị có quyền vận hành không giới hạn; bạn không được cố gắng vượt qua đăng nhập, kiểm tra quyền hoặc giới hạn kỹ thuật.'}</p></section>
+    <section><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '3. Payment and renewal' : '3. Thanh toán và gia hạn'}</h2><p className="mt-2 text-muted-foreground">{english ? 'When sales open, the Plus beta is prepaid for 30 days through VietQR/SePay and activates only after SePay verifies the correct order code and amount. There is no automatic renewal or upgrade in the beta. At present, users can make voluntary QR contributions; contributions do not unlock features, add uses, or activate a subscription. Subscription orders expire after 24 hours; donation QR orders expire after five minutes.' : 'Khi mở bán, beta Plus được thanh toán trước 30 ngày qua mã QR VietQR/SePay và chỉ kích hoạt sau khi SePay xác nhận đúng mã đơn và số tiền. Beta không tự động gia hạn hoặc nâng gói. Hiện tại, người dùng có thể ủng hộ tự nguyện qua mã QR; ủng hộ không mở khóa tính năng, không cộng lượt và không kích hoạt thuê bao. Đơn thuê bao hết hạn sau 24 giờ; mã QR ủng hộ hết hạn sau năm phút.'}</p></section>
+    <section id="mien-tru-trach-nhiem"><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '4. Informational use' : '4. Tính chất tham khảo'}</h2><p className="mt-2 flex items-start gap-2 text-muted-foreground">{english ? 'Charts, trend signals, linked sources, and AI responses are for information only. They are not investment or financial advice, or an offer to buy or sell. Kim Tuyến does not promise that data, forecasts, or AI responses are always complete, accurate, timely, or suitable for your situation. You assess the information and remain responsible for your decisions.' : 'Biểu đồ, tín hiệu xu hướng, nguồn liên kết và câu trả lời AI chỉ có mục đích thông tin, không phải tư vấn đầu tư, tư vấn tài chính hay lời đề nghị mua bán. Kim Tuyến không cam kết rằng dữ liệu, dự báo hoặc phản hồi AI luôn đầy đủ, chính xác, kịp thời hay phù hợp với hoàn cảnh của bạn. Bạn tự đánh giá thông tin và tự chịu trách nhiệm cho quyết định của mình.'}</p></section>
+    <section><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '5. Taxes and legal information' : '5. Thuế và thông tin pháp lý'}</h2><p className="mt-2 text-muted-foreground">{english ? 'The calculator does not automatically deduct a 0.1% gold-transfer tax. Tax treatment depends on the applicable implementation rules, asset type, transaction date, and verified official guidance. Check the cited government source before using any tax simulation.' : 'Công cụ không tự động trừ thuế chuyển nhượng vàng 0,1%. Cách áp dụng phụ thuộc văn bản triển khai, loại tài sản, thời điểm giao dịch và hướng dẫn chính thức đã kiểm chứng. Hãy xem nguồn của cơ quan nhà nước trước khi dùng mô phỏng thuế.'}</p></section>
+    <section><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '6. Providers and external links' : '6. Nhà cung cấp và liên kết bên ngoài'}</h2><p className="mt-2 flex items-start gap-2 text-muted-foreground">{english ? 'Price data and reference sources may come from external sites. AI providers are called server-side for AI Analysis according to the deployed configuration. External services have their own terms and policies; review them before opening links or providing information.' : 'Dữ liệu giá và nguồn tham khảo có thể đến từ các trang bên ngoài. Nhà cung cấp AI được gọi ở phía máy chủ cho Phân tích AI theo cấu hình triển khai. Các dịch vụ bên ngoài có điều khoản và chính sách riêng; hãy xem xét chúng trước khi mở liên kết hoặc cung cấp thông tin.'}<ExternalLink className="mt-1 size-3.5 shrink-0" /></p></section>
+    <section id="lien-he"><h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '7. Contact' : '7. Liên hệ'}</h2><p className="mt-2 text-muted-foreground">{english ? 'Feedback or questions about the service:' : 'Góp ý hoặc câu hỏi về dịch vụ:'}<a href="mailto:khoadangnguyen.dev@gmail.com" className="ml-1 font-semibold text-foreground underline-offset-4 hover:underline">khoadangnguyen.dev@gmail.com</a>.</p></section>
+  </LegalPage>;
 }

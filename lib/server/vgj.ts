@@ -1,4 +1,5 @@
 import 'server-only';
+import { marketFetch as fetch } from '@/lib/server/market-fetch';
 
 import {
   getMarketCompany,
@@ -7,7 +8,7 @@ import {
   type AggregatedMarketProduct,
   type MarketProduct,
 } from '@/lib/market-sources';
-import type { MarketData, PricePoint } from '@/lib/server/sjc';
+import type { MarketData, MarketDataOptions, PricePoint } from '@/lib/server/sjc';
 
 /**
  * VietinBank Gold & Jewellery publishes its current gold table in the
@@ -184,6 +185,7 @@ function unavailableMarketData(
 /** Standalone adapter for callers that do not share the SJC first-party cache. */
 export async function getVgjMarketData(
   productId: string | null | undefined,
+  options: MarketDataOptions = {},
 ): Promise<MarketData> {
   const company = getMarketCompany('vgj');
   const product = getMarketProduct(company.id, productId);
@@ -192,6 +194,14 @@ export async function getVgjMarketData(
       company,
       product,
       'Sản phẩm không thuộc danh mục VietinBank Gold & Jewellery.',
+    );
+  }
+
+  if (options.view === 'history') {
+    return unavailableMarketData(
+      company,
+      product,
+      'VGJ hiện chỉ hỗ trợ snapshot giá hiện tại, chưa có lịch sử giao dịch.',
     );
   }
 
@@ -206,7 +216,11 @@ export async function getVgjMarketData(
     );
   }
 
-  const latest = toPoint(vietnamDate(new Date(quote.observedAt)), quote.buy, quote.sell);
+  const latest = toPoint(
+    vietnamDate(new Date(quote.observedAt)),
+    quote.buy,
+    quote.sell,
+  );
   return {
     mode: 'live',
     availability: 'available',

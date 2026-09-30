@@ -32,7 +32,7 @@ describe('calculateAnalysisMetrics', () => {
       return: 5,
       returnPercent: 5,
     });
-    expect(metrics.movingAverage).toEqual({ ma7: 105, ma30: 105 });
+    expect(metrics.movingAverage).toEqual({ ma7: null, ma30: null });
     expect(metrics.highLow).toEqual({ high: 110, low: 100 });
     expect(metrics.dailyReturnVolatilityPercent).toBeGreaterThan(0);
     expect(metrics.maxDrawdownPercent).toBe(-4.5455);

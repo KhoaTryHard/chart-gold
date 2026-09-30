@@ -25,7 +25,7 @@ const records: PricePoint[] = [
   { date: '2026-01-01', buy: 99, sell: 100, spread: 1, eventId: null },
 ];
 const request: AnalysisRequest = {
-  question: 'Giá đang có xu hướng gì?',
+  question: 'Giá hiện tại là bao nhiêu?',
   messages: [],
   product: SJC_PRODUCTS[0],
   range: '7N',
