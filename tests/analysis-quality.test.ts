@@ -16,7 +16,10 @@ import {
 import { analysisRequestSchema } from '@/lib/analysis/request';
 import { resolveScenario } from '@/lib/analysis/input';
 import { byteOffsetToIndex, withCitations } from '@/lib/analysis/citations';
-import { getMarketCompany } from '@/lib/market-sources';
+import {
+  getMarketCompany,
+  getMarketProductCategory,
+} from '@/lib/market-sources';
 import type { MarketData, PricePoint } from '@/lib/server/sjc';
 
 const point = (date: string, buy: number, sell = buy + 2): PricePoint => ({
@@ -47,9 +50,30 @@ describe('financial correctness and context', () => {
     const btmh = resolveIntent('Giá vàng Bảo Tín Mạnh Hải hôm nay?');
     expect(btmh.companyIds).toEqual(['btmh']);
     expect(btmh.companyIds).not.toContain('baotin');
-    expect(resolveIntent('Giá vàng Bảo Tín Minh Châu hôm nay?').companyIds).toEqual([
-      'btmc',
-    ]);
+    expect(
+      resolveIntent('Giá vàng Bảo Tín Minh Châu hôm nay?').companyIds,
+    ).toEqual(['btmc']);
+  });
+  it('resolves named BTMH products and their shared categories without picking another brand', () => {
+    const gift = resolveIntent(
+      'Giá vàng Bảo Tín Mạnh Hải Kim Gia Bảo Gift hôm nay?',
+    );
+    expect(gift.companyIds).toEqual(['btmh']);
+    expect(gift.productIds).toEqual(['btmh-kgbg']);
+    expect(gift.category).toBe('gift');
+
+    const accumulation = resolveIntent('Giá KGB Bảo Tín Mạnh Hải hôm nay?');
+    expect(accumulation.companyIds).toEqual(['btmh']);
+    expect(accumulation.productIds).toEqual(['btmh-kgb']);
+    expect(accumulation.category).toBe('investment-gold');
+
+    const ringQuestion = resolveIntent('So sánh giá vàng nhẫn hôm nay');
+    expect(ringQuestion.category).toBe('ring');
+    expect(
+      selectQuoteGroups(ringQuestion, 'btmh', 'btmh-kgb').every(
+        (group) => getMarketProductCategory(group.product) === 'ring',
+      ),
+    ).toBe(true);
   });
   it('does not mistake a causal question for a gold-ring product filter', () => {
     const intent = resolveIntent('Nguyên nhân giá vàng tăng hôm nay là gì?');
@@ -93,13 +117,17 @@ describe('financial correctness and context', () => {
   });
   it('extracts explicitly labeled investment inputs from an English gold question', () => {
     expect(
-      investmentInputs('I hold 2 taels at cost basis of 145.5 million VND, fees 200 thousand VND'),
+      investmentInputs(
+        'I hold 2 taels at cost basis of 145.5 million VND, fees 200 thousand VND',
+      ),
     ).toEqual({
       quantityLuong: 2,
       costPerLuongVnd: 145_500_000,
       feesVnd: 200_000,
     });
-    expect(resolveIntent('Should I buy 2 taels of gold now?').kind).toBe('investment');
+    expect(resolveIntent('Should I buy 2 taels of gold now?').kind).toBe(
+      'investment',
+    );
   });
   it('normalizes a Vietnamese price quoted per chỉ to the server unit per lượng', () => {
     expect(
@@ -263,7 +291,9 @@ describe('financial correctness and context', () => {
     expect(context.missing).toHaveLength(1);
   });
   it('does not turn a fallback quote into a current portfolio profit', () => {
-    const intent = resolveIntent('Hôm nay danh mục của tôi có chốt lời được chưa?');
+    const intent = resolveIntent(
+      'Hôm nay danh mục của tôi có chốt lời được chưa?',
+    );
     const groups = selectQuoteGroups(intent, 'sjc', 'bar-1l').slice(0, 1);
     const market: MarketData = {
       company: getMarketCompany('sjc'),
@@ -276,7 +306,11 @@ describe('financial correctness and context', () => {
       latest: point('2026-09-05', 150, 153),
       observedAt: '2026-09-05T00:00:00Z',
       generatedAt: '2026-09-05T00:00:00Z',
-      source: { provider: 'snapshot', url: 'https://example.com', official: false },
+      source: {
+        provider: 'snapshot',
+        url: 'https://example.com',
+        official: false,
+      },
       historySource: { provider: 'snapshot', url: 'https://example.com' },
     };
     const context = buildMarketContext(
@@ -289,17 +323,19 @@ describe('financial correctness and context', () => {
       '',
       {
         version: 1,
-        transactions: [{
-          id: 'fallback-ledger',
-          date: '2026-09-01',
-          side: 'buy',
-          companyId: 'sjc',
-          productId: 'bar-1l',
-          quantityLuong: 1,
-          unitPriceVnd: 140_000_000,
-          feesVnd: 0,
-          note: '',
-        }],
+        transactions: [
+          {
+            id: 'fallback-ledger',
+            date: '2026-09-01',
+            side: 'buy',
+            companyId: 'sjc',
+            productId: 'bar-1l',
+            quantityLuong: 1,
+            unitPriceVnd: 140_000_000,
+            feesVnd: 0,
+            note: '',
+          },
+        ],
       },
     );
     expect(context.portfolioSummary?.unrealizedPnlVnd).toBeNull();

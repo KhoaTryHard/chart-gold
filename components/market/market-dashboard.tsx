@@ -39,9 +39,9 @@ const PriceChart = dynamic(
     import('@/components/market/price-chart').then(
       (module) => module.PriceChart,
     ),
-    {
-      ssr: false,
-      loading: () => (
+  {
+    ssr: false,
+    loading: () => (
       <div
         className="glass-panel min-h-[733px] p-5 sm:p-6 xl:min-h-[701px]"
         aria-label="Đang tải biểu đồ"
@@ -77,6 +77,7 @@ import { DEFAULT_SJC_PRODUCT_ID, getSjcProduct } from '@/lib/sjc-products';
 import { COMPARISON_SETS } from '@/lib/comparison-catalog';
 import {
   getMarketCompany,
+  getMarketProductCategory,
   getMarketHistoryCapability,
   getMarketProduct,
   getMarketProducts,
@@ -118,7 +119,10 @@ type MarketResponse = {
 
 type DisplayUnit = 'luong' | 'chi';
 
-function formatVnd(value: number | null | undefined, unit: DisplayUnit = 'luong') {
+function formatVnd(
+  value: number | null | undefined,
+  unit: DisplayUnit = 'luong',
+) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   const converted = unit === 'chi' ? value / 10 : value;
   return Math.round(converted * 1_000_000).toLocaleString('vi-VN');
@@ -148,7 +152,10 @@ function MarketSkeleton() {
   return (
     <div className="space-y-4" aria-label="Đang tải dữ liệu thị trường">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="metric-card metric-card--gold metric-card--quote min-h-[291px] sm:col-span-2 sm:min-h-[248px] xl:col-span-2" aria-hidden="true">
+        <div
+          className="metric-card metric-card--gold metric-card--quote min-h-[291px] sm:col-span-2 sm:min-h-[248px] xl:col-span-2"
+          aria-hidden="true"
+        >
           <div className="flex items-center justify-between gap-3">
             <span className="ui-skeleton h-4 w-36" />
             <span className="ui-skeleton h-7 w-24" />
@@ -165,7 +172,11 @@ function MarketSkeleton() {
           </div>
         </div>
         {[0, 1].map((index) => (
-          <div key={index} className="metric-card min-h-[176px]" aria-hidden="true">
+          <div
+            key={index}
+            className="metric-card min-h-[176px]"
+            aria-hidden="true"
+          >
             <span className="ui-skeleton h-4 w-32" />
             <span className="ui-skeleton mt-7 h-10 w-36" />
             <span className="ui-skeleton mt-3 h-4 w-40" />
@@ -181,14 +192,20 @@ function MarketSkeleton() {
         ))}
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="glass-panel min-h-[733px] p-4 sm:p-6 xl:min-h-[701px]" aria-hidden="true">
+        <div
+          className="glass-panel min-h-[733px] p-4 sm:p-6 xl:min-h-[701px]"
+          aria-hidden="true"
+        >
           <span className="ui-skeleton block h-5 w-48" />
           <span className="ui-skeleton mt-4 block h-4 w-64" />
           <span className="ui-skeleton mt-3 block h-4 w-52" />
           <span className="ui-skeleton mt-7 block h-[288px] w-full sm:h-[378px]" />
           <span className="ui-skeleton mt-6 block h-4 w-60" />
         </div>
-        <aside className="glass-panel min-h-[469px] p-5 sm:p-6" aria-hidden="true">
+        <aside
+          className="glass-panel min-h-[469px] p-5 sm:p-6"
+          aria-hidden="true"
+        >
           <span className="ui-skeleton size-10" />
           <span className="ui-skeleton mt-8 block h-4 w-32" />
           <span className="ui-skeleton mt-3 block h-6 w-full" />
@@ -222,7 +239,9 @@ export default function MarketDashboard({
   );
   const [displayUnit, setDisplayUnit] = useState<DisplayUnit>('luong');
   const [latestQuote, setLatestQuote] = useState<PricePoint | null>(null);
-  const [timestampKind, setTimestampKind] = useState<'source' | 'retrieval-or-date'>('retrieval-or-date');
+  const [timestampKind, setTimestampKind] = useState<
+    'source' | 'retrieval-or-date'
+  >('retrieval-or-date');
   const activeCompanyId = useRef<MarketCompanyId>('sjc');
   const activeProductId = useRef<MarketProductId>(DEFAULT_SJC_PRODUCT_ID);
   const [records, setRecords] = useState<PricePoint[]>(fallbackRecords);
@@ -257,11 +276,13 @@ export default function MarketDashboard({
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem('kim-tuyen-market-selection');
-      const parsed = saved ? JSON.parse(saved) as {
-        companyId?: string;
-        productId?: string;
-        displayUnit?: string;
-      } : null;
+      const parsed = saved
+        ? (JSON.parse(saved) as {
+            companyId?: string;
+            productId?: string;
+            displayUnit?: string;
+          })
+        : null;
       queueMicrotask(() => {
         if (parsed?.displayUnit === 'luong' || parsed?.displayUnit === 'chi')
           setDisplayUnit(parsed.displayUnit);
@@ -285,11 +306,14 @@ export default function MarketDashboard({
   useEffect(() => {
     if (!selectionHydratedRef.current) return;
     try {
-      window.localStorage.setItem('kim-tuyen-market-selection', JSON.stringify({
-        companyId,
-        productId,
-        displayUnit,
-      }));
+      window.localStorage.setItem(
+        'kim-tuyen-market-selection',
+        JSON.stringify({
+          companyId,
+          productId,
+          displayUnit,
+        }),
+      );
     } catch {
       // Storage can be blocked by privacy mode.
     }
@@ -402,8 +426,13 @@ export default function MarketDashboard({
           activeCompanyId.current = requestedCompanyId;
           activeProductId.current = requestedProductId;
         } else {
-          if (requestedCompanyId === 'sjc' && requestedProductId === DEFAULT_SJC_PRODUCT_ID) {
-            setLatestQuote((current) => current ?? fallbackRecords.at(-1) ?? null);
+          if (
+            requestedCompanyId === 'sjc' &&
+            requestedProductId === DEFAULT_SJC_PRODUCT_ID
+          ) {
+            setLatestQuote(
+              (current) => current ?? fallbackRecords.at(-1) ?? null,
+            );
             setObservedAt(fallbackDataset.metadata.snapshotTakenAt);
             setTimestampKind('retrieval-or-date');
           }
@@ -475,12 +504,21 @@ export default function MarketDashboard({
     ? presentMarketCatalogText(unavailableReason, locale)
     : null;
   const currentProducts = getMarketProducts(companyId);
-  const comparisonSet = product.group.toLocaleLowerCase('vi-VN').includes('nhẫn') || product.id.toLocaleLowerCase().includes('ring')
-    ? 'ring-9999'
-    : 'sjc-bar';
-  const calculatorSupported = Object.values(COMPARISON_SETS).some((set) =>
-    set.products.some((candidate) => candidate.companyId === companyId && candidate.productId === productId && candidate.eligibility === 'eligible' && (candidate.category === 'bar' || candidate.category === 'ring')),
-  );
+  const productCategory = getMarketProductCategory(product);
+  const comparisonSet =
+    productCategory === 'ring'
+      ? 'ring-9999'
+      : productCategory === 'bar'
+        ? 'sjc-bar'
+        : null;
+  const calculatorSupported = comparisonSet
+    ? COMPARISON_SETS[comparisonSet].products.some(
+        (candidate) =>
+          candidate.companyId === companyId &&
+          candidate.productId === productId &&
+          candidate.eligibility === 'eligible',
+      )
+    : false;
   const productGroups = [...new Set(currentProducts.map((item) => item.group))];
   const annualHistoryKey = `${companyId}:${productId}`;
   const annualCapability = getMarketHistoryCapability(companyId, productId);
@@ -603,10 +641,19 @@ export default function MarketDashboard({
       : mode === 'live' && !isStale
         ? { label: english ? 'Updated' : 'Đã cập nhật', tone: 'bg-emerald-500' }
         : mode === 'unavailable'
-          ? { label: english ? 'No data' : 'Chưa có dữ liệu', tone: 'bg-red-500' }
+          ? {
+              label: english ? 'No data' : 'Chưa có dữ liệu',
+              tone: 'bg-red-500',
+            }
           : mode === 'live' || mode === 'delayed'
-            ? { label: english ? 'Source delayed' : 'Nguồn đang trễ', tone: 'bg-amber-500' }
-            : { label: english ? 'Fallback data' : 'Bản dự phòng', tone: 'bg-red-500' };
+            ? {
+                label: english ? 'Source delayed' : 'Nguồn đang trễ',
+                tone: 'bg-amber-500',
+              }
+            : {
+                label: english ? 'Fallback data' : 'Bản dự phòng',
+                tone: 'bg-red-500',
+              };
   const handleManualRefresh = useCallback(
     () => void refreshPrices(companyId, productId, true),
     [companyId, productId, refreshPrices],
@@ -617,98 +664,112 @@ export default function MarketDashboard({
       <label className="min-w-0 flex-1 text-xs font-semibold text-muted-foreground">
         {english ? 'Brand' : 'Thương hiệu'}
         <Select
-        value={companyId}
-        onValueChange={(value) => {
-          if (!value) return;
-          const nextCompanyId = value as MarketCompanyId;
-          const nextProduct = getMarketProduct(nextCompanyId, null);
-          triggerChartAnimation();
-          invalidatePendingMarketRequest();
-          setRecords([]);
-          setLatestQuote(null);
-          setTimestampKind('retrieval-or-date');
-          setMode('connecting');
-          setUnavailableReason(null);
-          setCompanyId(nextCompanyId);
-          setProductId(nextProduct.id);
-          setProduct(nextProduct);
-          if (
-            range === '1N' &&
-            getMarketHistoryCapability(nextCompanyId, nextProduct.id) !==
-              'annual'
-          ) {
-            setRange('1T');
-          }
-        }}
+          value={companyId}
+          onValueChange={(value) => {
+            if (!value) return;
+            const nextCompanyId = value as MarketCompanyId;
+            const nextProduct = getMarketProduct(nextCompanyId, null);
+            triggerChartAnimation();
+            invalidatePendingMarketRequest();
+            setRecords([]);
+            setLatestQuote(null);
+            setTimestampKind('retrieval-or-date');
+            setMode('connecting');
+            setUnavailableReason(null);
+            setCompanyId(nextCompanyId);
+            setProductId(nextProduct.id);
+            setProduct(nextProduct);
+            if (
+              range === '1N' &&
+              getMarketHistoryCapability(nextCompanyId, nextProduct.id) !==
+                'annual'
+            ) {
+              setRange('1T');
+            }
+          }}
         >
-          <SelectTrigger className="h-10 w-full" aria-label={english ? 'Select dealer' : 'Chọn công ty'}>
+          <SelectTrigger
+            className="h-10 w-full"
+            aria-label={english ? 'Select dealer' : 'Chọn công ty'}
+          >
             <Landmark className="size-4 text-[var(--gold)]" />
             <SelectValue className="min-w-0 truncate">
-            {displayedCompany.shortName}
+              {displayedCompany.shortName}
             </SelectValue>
-        </SelectTrigger>
-        <SelectContent align="end" className="min-w-[180px]">
-          {MARKET_COMPANIES.filter(
-            (company) => company.adapter !== 'unavailable',
-          ).map((company) => (
-            <SelectItem key={company.id} value={company.id}>
-              {presentMarketCompany(company, locale).name}
-            </SelectItem>
-          ))}
-        </SelectContent>
+          </SelectTrigger>
+          <SelectContent align="end" className="min-w-[180px]">
+            {MARKET_COMPANIES.filter(
+              (company) => company.adapter !== 'unavailable',
+            ).map((company) => (
+              <SelectItem key={company.id} value={company.id}>
+                {presentMarketCompany(company, locale).name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </label>
       <label className="min-w-0 flex-1 text-xs font-semibold text-muted-foreground">
         {english ? 'Gold type' : 'Loại vàng'}
         <Select
-        value={productId}
-        onValueChange={(value) => {
-          if (!value) return;
-          const nextProductId = value as MarketProductId;
-          triggerChartAnimation();
-          invalidatePendingMarketRequest();
-          setRecords([]);
-          setLatestQuote(null);
-          setTimestampKind('retrieval-or-date');
-          setMode('connecting');
-          setUnavailableReason(null);
-          setProductId(nextProductId);
-          setProduct(getMarketProduct(companyId, nextProductId));
-          if (
-            range === '1N' &&
-            getMarketHistoryCapability(companyId, nextProductId) !== 'annual'
-          ) {
-            setRange('1T');
-          }
-        }}
+          value={productId}
+          onValueChange={(value) => {
+            if (!value) return;
+            const nextProductId = value as MarketProductId;
+            triggerChartAnimation();
+            invalidatePendingMarketRequest();
+            setRecords([]);
+            setLatestQuote(null);
+            setTimestampKind('retrieval-or-date');
+            setMode('connecting');
+            setUnavailableReason(null);
+            setProductId(nextProductId);
+            setProduct(getMarketProduct(companyId, nextProductId));
+            if (
+              range === '1N' &&
+              getMarketHistoryCapability(companyId, nextProductId) !== 'annual'
+            ) {
+              setRange('1T');
+            }
+          }}
         >
-        <SelectTrigger
-          className="h-10 w-full"
-          aria-label={english ? `Select a gold product from ${displayedCompany.name}` : `Chọn loại vàng ${displayedCompany.name}`}
-        >
-          <Gem className="size-4 text-[var(--gold)]" />
-          <SelectValue className="min-w-0 truncate">
-            {presentMarketProduct(getMarketProduct(companyId, productId), locale).label}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent align="end" className="max-w-[calc(100vw-2rem)]">
-          {productGroups.map((group) => (
-            <SelectGroup key={group}>
-              <SelectLabel>{presentMarketCatalogText(group, locale)}</SelectLabel>
-              {currentProducts
-                .filter((item) => item.group === group)
-                .map((item) => (
-                  <SelectItem
-                    key={item.id}
-                    value={item.id}
-                    disabled={!isMarketProductSelectable(item)}
-                  >
-                    {presentMarketProduct(item, locale).label}
-                  </SelectItem>
-                ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
+          <SelectTrigger
+            className="h-10 w-full"
+            aria-label={
+              english
+                ? `Select a gold product from ${displayedCompany.name}`
+                : `Chọn loại vàng ${displayedCompany.name}`
+            }
+          >
+            <Gem className="size-4 text-[var(--gold)]" />
+            <SelectValue className="min-w-0 truncate">
+              {
+                presentMarketProduct(
+                  getMarketProduct(companyId, productId),
+                  locale,
+                ).label
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="end" className="max-w-[calc(100vw-2rem)]">
+            {productGroups.map((group) => (
+              <SelectGroup key={group}>
+                <SelectLabel>
+                  {presentMarketCatalogText(group, locale)}
+                </SelectLabel>
+                {currentProducts
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={item.id}
+                      disabled={!isMarketProductSelectable(item)}
+                    >
+                      {presentMarketProduct(item, locale).label}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
         </Select>
       </label>
     </div>
@@ -719,43 +780,87 @@ export default function MarketDashboard({
       className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
       aria-live="polite"
     >
-      <span className={`size-2 rounded-full ${status.tone}`} aria-hidden="true" />
+      <span
+        className={`size-2 rounded-full ${status.tone}`}
+        aria-hidden="true"
+      />
       <span className="font-semibold text-foreground">{status.label}</span>
       {mode !== 'connecting' ? (
         <>
           <span aria-hidden="true">·</span>
           <span>{formatObservedAt()}</span>
-          <span>{timestampKind === 'source' ? (english ? 'source time' : 'giờ nguồn') : (english ? 'retrieval time' : 'giờ lấy dữ liệu')}</span>
+          <span>
+            {timestampKind === 'source'
+              ? english
+                ? 'source time'
+                : 'giờ nguồn'
+              : english
+                ? 'retrieval time'
+                : 'giờ lấy dữ liệu'}
+          </span>
         </>
       ) : null}
       {hasMarketData ? (
         <>
           <span aria-hidden="true">·</span>
-          <span>{english ? 'Source' : 'Nguồn'}: {presentMarketCatalogText(source.provider, locale)}</span>
+          <span>
+            {english ? 'Source' : 'Nguồn'}:{' '}
+            {presentMarketCatalogText(source.provider, locale)}
+          </span>
         </>
       ) : null}
     </div>
   );
 
   const quickTools = (
-    <section className="mb-6 grid gap-3 sm:grid-cols-3" aria-label={english ? 'Quick gold tools' : 'Làm gì tiếp theo'}>
-      <Link href={`/so-vang?company=${companyId}&product=${productId}&side=buy#so-vang-entry`} className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-base font-semibold hover:border-primary/50">
+    <section
+      className="mb-6 grid gap-3 sm:grid-cols-3"
+      aria-label={english ? 'Quick gold tools' : 'Làm gì tiếp theo'}
+    >
+      <Link
+        href={`/so-vang?company=${companyId}&product=${productId}&side=buy#so-vang-entry`}
+        className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-base font-semibold hover:border-primary/50"
+      >
         {english ? 'Record a transaction' : 'Ghi giao dịch mua hoặc bán'}
-        <span className="mt-1 block text-sm font-normal text-muted-foreground">{english ? 'Save your actual purchase or sale in a private gold ledger' : 'Lưu giá mua hoặc bán thực tế vào sổ vàng riêng của bạn'}</span>
+        <span className="mt-1 block text-sm font-normal text-muted-foreground">
+          {english
+            ? 'Save your actual purchase or sale in a private gold ledger'
+            : 'Lưu giá mua hoặc bán thực tế vào sổ vàng riêng của bạn'}
+        </span>
       </Link>
-      <Link href={`/cong-cu-vang?tool=so-sanh&set=${comparisonSet}&direction=buy&products=${companyId}%3A${productId}#so-sanh`} className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40">
+      <Link
+        href={`/cong-cu-vang?tool=so-sanh&set=${comparisonSet}&direction=buy&products=${companyId}%3A${productId}#so-sanh`}
+        className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
+      >
         {english ? 'Compare dealer prices' : 'So sánh giá các hãng'}
-        <span className="mt-1 block text-sm font-normal text-muted-foreground">{english ? 'See buy and sell prices side by side' : 'Xem số tiền bạn trả và có thể nhận ở từng nơi'}</span>
+        <span className="mt-1 block text-sm font-normal text-muted-foreground">
+          {english
+            ? 'See buy and sell prices side by side'
+            : 'Xem số tiền bạn trả và có thể nhận ở từng nơi'}
+        </span>
       </Link>
       {calculatorSupported ? (
-        <Link href={`/cong-cu-vang?tool=lai-lo&company=${companyId}&product=${productId}#hoa-von`} className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40">
+        <Link
+          href={`/cong-cu-vang?tool=lai-lo&company=${companyId}&product=${productId}#hoa-von`}
+          className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
+        >
           {english ? 'Estimate profit or loss' : 'Ước tính lãi hoặc lỗ'}
-          <span className="mt-1 block text-sm font-normal text-muted-foreground">{english ? 'Compare what you paid with the price today' : 'So sánh số đã trả với giá cửa hàng mua lại hôm nay'}</span>
+          <span className="mt-1 block text-sm font-normal text-muted-foreground">
+            {english
+              ? 'Compare what you paid with the price today'
+              : 'So sánh số đã trả với giá cửa hàng mua lại hôm nay'}
+          </span>
         </Link>
       ) : (
         <div className="rounded-2xl border border-amber-300/60 bg-amber-50/60 px-4 py-4 text-base font-semibold text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/20 dark:text-amber-100">
-          {english ? 'Calculator not available for this product' : 'Chưa tính được sản phẩm này'}
-          <span className="mt-1 block text-sm font-normal text-amber-900/75 dark:text-amber-100/75">{english ? 'Choose a supported plain ring or gold bar to continue.' : 'Chọn nhẫn trơn hoặc vàng miếng thuộc nhóm được hỗ trợ.'}</span>
+          {english
+            ? 'Calculator not available for this product'
+            : 'Chưa tính được sản phẩm này'}
+          <span className="mt-1 block text-sm font-normal text-amber-900/75 dark:text-amber-100/75">
+            {english
+              ? 'Choose a supported plain ring or gold bar to continue.'
+              : 'Chọn nhẫn trơn hoặc vàng miếng thuộc nhóm được hỗ trợ.'}
+          </span>
         </div>
       )}
     </section>
@@ -772,13 +877,22 @@ export default function MarketDashboard({
         locale={locale}
       />
       <PageTransition>
-        <main id="main-content" tabIndex={-1} className="market-main mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="market-main mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
+        >
           <section className="market-intro mb-6" aria-labelledby="market-title">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-accent-foreground">
               <Sparkles className="size-4 text-primary" aria-hidden="true" />
-              {english ? 'Gold prices, explained clearly' : 'Giá vàng, giải thích dễ hiểu'}
+              {english
+                ? 'Gold prices, explained clearly'
+                : 'Giá vàng, giải thích dễ hiểu'}
             </div>
-            <h1 id="market-title" className="max-w-3xl font-heading text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl">
+            <h1
+              id="market-title"
+              className="max-w-3xl font-heading text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl"
+            >
               {english ? 'Vietnam gold prices today' : 'Giá vàng hôm nay'}
             </h1>
             <p className="mt-2 max-w-3xl text-base leading-7 text-muted-foreground">
@@ -793,12 +907,18 @@ export default function MarketDashboard({
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
-                <p className="mb-1 text-sm font-semibold">{english ? 'Choose a brand and gold type' : 'Chọn thương hiệu và loại vàng'}</p>
+                <p className="mb-1 text-sm font-semibold">
+                  {english
+                    ? 'Choose a brand and gold type'
+                    : 'Chọn thương hiệu và loại vàng'}
+                </p>
                 {marketFilterControls}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <fieldset className="flex rounded-xl border border-border bg-muted/50 p-1">
-                  <legend className="sr-only">{english ? 'Display unit' : 'Đơn vị hiển thị'}</legend>
+                  <legend className="sr-only">
+                    {english ? 'Display unit' : 'Đơn vị hiển thị'}
+                  </legend>
                   {(['luong', 'chi'] as const).map((unit) => (
                     <button
                       key={unit}
@@ -807,7 +927,13 @@ export default function MarketDashboard({
                       onClick={() => setDisplayUnit(unit)}
                       className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${displayUnit === unit ? 'bg-[var(--surface-solid)] text-primary shadow-sm' : 'text-muted-foreground'}`}
                     >
-                      {unit === 'luong' ? (english ? 'Lượng' : 'Lượng') : (english ? 'Chỉ' : 'Chỉ')}
+                      {unit === 'luong'
+                        ? english
+                          ? 'Lượng'
+                          : 'Lượng'
+                        : english
+                          ? 'Chỉ'
+                          : 'Chỉ'}
                     </button>
                   ))}
                 </fieldset>
@@ -818,12 +944,20 @@ export default function MarketDashboard({
                   disabled={isRefreshing}
                   aria-label={english ? 'Update price' : 'Cập nhật giá'}
                 >
-                  {isRefreshing ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  {isRefreshing ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
                   <span>{english ? 'Update price' : 'Cập nhật giá'}</span>
                 </Button>
               </div>
             </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{english ? '1 lượng = 10 chỉ. Prices, changes, and the chart use your selected unit.' : '1 lượng = 10 chỉ. Giá, mức biến động và biểu đồ đều theo đơn vị bạn chọn.'}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {english
+                ? '1 lượng = 10 chỉ. Prices, changes, and the chart use your selected unit.'
+                : '1 lượng = 10 chỉ. Giá, mức biến động và biểu đồ đều theo đơn vị bạn chọn.'}
+            </p>
           </section>
           {priceStatus}
 
@@ -831,19 +965,21 @@ export default function MarketDashboard({
             <div className="mb-3 flex items-start gap-2 rounded-[16px] border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
               <WifiOff className="mt-0.5 size-3.5 shrink-0" />
               {mode === 'connecting'
-                ? (english ? 'Connecting to the market-price source…' : 'Đang kết nối tới nguồn giá thị trường…')
+                ? english
+                  ? 'Connecting to the market-price source…'
+                  : 'Đang kết nối tới nguồn giá thị trường…'
                 : mode === 'unavailable'
                   ? (displayedUnavailableReason ??
                     (english
                       ? `${displayedCompany.name} has no available price data.`
                       : `${selectedCompany.name} chưa có dữ liệu giá khả dụng.`))
                   : mode === 'fallback'
-                    ? (english
+                    ? english
                       ? 'The live source is temporarily unavailable. The latest historical snapshot is shown and is not treated as a current price.'
-                      : 'Nguồn trực tiếp tạm thời không phản hồi. Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.')
-                    : (english
+                      : 'Nguồn trực tiếp tạm thời không phản hồi. Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.'
+                    : english
                       ? 'The price source is updating more slowly than usual. Check again before trading.'
-                      : 'Nguồn giá đang cập nhật chậm hơn bình thường. Hãy đối chiếu lại trước khi giao dịch.')}
+                      : 'Nguồn giá đang cập nhật chậm hơn bình thường. Hãy đối chiếu lại trước khi giao dịch.'}
             </div>
           ) : null}
 
@@ -853,45 +989,90 @@ export default function MarketDashboard({
                 <article className="metric-card metric-card--gold metric-card--quote sm:col-span-2 xl:col-span-2">
                   <div className="metric-quote-row">
                     <div className="flex items-start justify-between">
-                    <p className="metric-label">
-                      {english ? 'You buy · dealer sells' : 'Bạn mua · cửa hàng bán ra'}
-                    </p>
-                    <ChangeBadge value={daySellChange} displayUnit={displayUnit} english={english} />
+                      <p className="metric-label">
+                        {english
+                          ? 'You buy · dealer sells'
+                          : 'Bạn mua · cửa hàng bán ra'}
+                      </p>
+                      <ChangeBadge
+                        value={daySellChange}
+                        displayUnit={displayUnit}
+                        english={english}
+                      />
                     </div>
                     <p className="metric-value">
                       {formatVnd(currentQuote?.sell, displayUnit)}
-                      <span className="metric-value__unit">{displayUnitLabel(displayUnit, english)}</span>
+                      <span className="metric-value__unit">
+                        {displayUnitLabel(displayUnit, english)}
+                      </span>
                     </p>
-                    <p className="metric-unit">{english ? 'The amount you pay' : 'Số tiền bạn trả khi mua'}</p>
+                    <p className="metric-unit">
+                      {english
+                        ? 'The amount you pay'
+                        : 'Số tiền bạn trả khi mua'}
+                    </p>
                   </div>
                   <div className="metric-quote-row mt-4 border-t border-border/70 pt-4">
                     <div className="flex items-start justify-between">
-                    <p className="metric-label">
-                      {english ? 'You sell · dealer buys' : 'Bạn bán · cửa hàng mua vào'}
-                    </p>
-                    <ChangeBadge value={dayBuyChange} displayUnit={displayUnit} english={english} />
+                      <p className="metric-label">
+                        {english
+                          ? 'You sell · dealer buys'
+                          : 'Bạn bán · cửa hàng mua vào'}
+                      </p>
+                      <ChangeBadge
+                        value={dayBuyChange}
+                        displayUnit={displayUnit}
+                        english={english}
+                      />
                     </div>
                     <p className="metric-value">
                       {formatVnd(currentQuote?.buy, displayUnit)}
-                      <span className="metric-value__unit">{displayUnitLabel(displayUnit, english)}</span>
+                      <span className="metric-value__unit">
+                        {displayUnitLabel(displayUnit, english)}
+                      </span>
                     </p>
-                    <p className="metric-unit">{english ? 'The amount the dealer pays you' : 'Số tiền cửa hàng trả khi bạn bán'}</p>
+                    <p className="metric-unit">
+                      {english
+                        ? 'The amount the dealer pays you'
+                        : 'Số tiền cửa hàng trả khi bạn bán'}
+                    </p>
                   </div>
                 </article>
                 <article className="metric-card">
                   <div className="flex items-start justify-between">
-                  <p className="metric-label">{english ? 'Buy–sell difference' : 'Chênh lệch giá mua và bán'}</p>
-                    <span className="status-badge">{english ? 'Current' : 'Hiện tại'}</span>
+                    <p className="metric-label">
+                      {english
+                        ? 'Buy–sell difference'
+                        : 'Chênh lệch giá mua và bán'}
+                    </p>
+                    <span className="status-badge">
+                      {english ? 'Current' : 'Hiện tại'}
+                    </span>
                   </div>
                   <p className="metric-value">
-                    {formatVnd(currentQuote ? currentQuote.sell - currentQuote.buy : null, displayUnit)}
-                    <span className="metric-value__unit">{displayUnitLabel(displayUnit, english)}</span>
+                    {formatVnd(
+                      currentQuote
+                        ? currentQuote.sell - currentQuote.buy
+                        : null,
+                      displayUnit,
+                    )}
+                    <span className="metric-value__unit">
+                      {displayUnitLabel(displayUnit, english)}
+                    </span>
                   </p>
-                  <p className="metric-unit">{english ? 'Before making charges' : 'Chưa tính phí gia công'}</p>
+                  <p className="metric-unit">
+                    {english
+                      ? 'Before making charges'
+                      : 'Chưa tính phí gia công'}
+                  </p>
                 </article>
                 <article className="metric-card metric-card--signal">
                   <div className="flex items-start justify-between">
-                    <p className="metric-label">{english ? 'Change in the period' : 'Thay đổi trong thời gian đang xem'}</p>
+                    <p className="metric-label">
+                      {english
+                        ? 'Change in the period'
+                        : 'Thay đổi trong thời gian đang xem'}
+                    </p>
                     {isUptrend ? (
                       <TrendingUp className="size-5 text-emerald-700 dark:text-emerald-300" />
                     ) : (
@@ -902,11 +1083,17 @@ export default function MarketDashboard({
                     className={`mt-7 text-xl font-semibold tracking-[-0.03em] ${isUptrend ? 'text-emerald-900 dark:text-emerald-200' : 'text-red-900 dark:text-red-200'}`}
                   >
                     {percent >= 0
-                      ? (english ? `Up ${percent.toFixed(1)}%` : `Tăng ${percent.toFixed(1)}%`)
-                      : (english ? `Down ${Math.abs(percent).toFixed(1)}%` : `Giảm ${Math.abs(percent).toFixed(1)}%`)}
+                      ? english
+                        ? `Up ${percent.toFixed(1)}%`
+                        : `Tăng ${percent.toFixed(1)}%`
+                      : english
+                        ? `Down ${Math.abs(percent).toFixed(1)}%`
+                        : `Giảm ${Math.abs(percent).toFixed(1)}%`}
                   </p>
                   <p className="metric-unit">
-                    {english ? 'Compared with the first price in this period' : 'So với giá đầu kỳ đã chọn'}
+                    {english
+                      ? 'Compared with the first price in this period'
+                      : 'So với giá đầu kỳ đã chọn'}
                   </p>
                 </article>
               </section>
@@ -949,27 +1136,34 @@ export default function MarketDashboard({
                     {english ? 'Trend summary' : 'Tóm tắt xu hướng'}
                   </p>
                   <h2 className="mt-2 font-heading text-2xl font-semibold leading-tight tracking-[-0.04em]">
-                    {english
-                      ? `Price is ${isUptrend ? 'above' : 'below'} the ${
-                          { '7N': '7-day', '1T': 'one-month', '1N': 'one-year' }[
-                            range
-                          ]
-                        } average.`
-                        : <>Giá đang ở {isUptrend ? 'trên' : 'dưới'} mức bình quân {selectedRange.label}.</>}
+                    {english ? (
+                      `Price is ${isUptrend ? 'above' : 'below'} the ${
+                        { '7N': '7-day', '1T': 'one-month', '1N': 'one-year' }[
+                          range
+                        ]
+                      } average.`
+                    ) : (
+                      <>
+                        Giá đang ở {isUptrend ? 'trên' : 'dưới'} mức bình quân{' '}
+                        {selectedRange.label}.
+                      </>
+                    )}
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-muted-foreground">
                     {change >= 0
-                      ? (english
+                      ? english
                         ? 'The sell price is higher than at the start of this period. Check the amount a dealer buys back before deciding.'
-                        : 'Giá bán ra cao hơn đầu kỳ đã chọn. Hãy xem cả số tiền cửa hàng mua lại trước khi quyết định.')
-                      : (english
+                        : 'Giá bán ra cao hơn đầu kỳ đã chọn. Hãy xem cả số tiền cửa hàng mua lại trước khi quyết định.'
+                      : english
                         ? 'The sell price is lower than at the start of this period. Check more data before deciding.'
-                        : 'Giá bán ra thấp hơn đầu kỳ đã chọn. Hãy xem thêm dữ liệu trước khi quyết định.')}
+                        : 'Giá bán ra thấp hơn đầu kỳ đã chọn. Hãy xem thêm dữ liệu trước khi quyết định.'}
                   </p>
                   <div className="mt-8 space-y-3 border-t border-white/10 pt-5 text-xs">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">
-                        {english ? 'Change in selected period' : 'Thay đổi trong thời gian đang xem'}
+                        {english
+                          ? 'Change in selected period'
+                          : 'Thay đổi trong thời gian đang xem'}
                       </span>
                       <b>
                         {percent >= 0 ? '+' : ''}
@@ -986,9 +1180,19 @@ export default function MarketDashboard({
                     </div>
                     <div className="flex justify-between pt-1">
                       <span className="text-muted-foreground">
-                        {english ? 'Average sell price' : 'Giá bán ra bình quân'}
+                        {english
+                          ? 'Average sell price'
+                          : 'Giá bán ra bình quân'}
                       </span>
-                      <b>{average === null ? '—' : (average / (displayUnit === 'chi' ? 10 : 1)).toFixed(1)} {english ? 'million' : 'triệu'} / {displayUnit === 'chi' ? 'chỉ' : 'lượng'}</b>
+                      <b>
+                        {average === null
+                          ? '—'
+                          : (
+                              average / (displayUnit === 'chi' ? 10 : 1)
+                            ).toFixed(1)}{' '}
+                        {english ? 'million' : 'triệu'} /{' '}
+                        {displayUnit === 'chi' ? 'chỉ' : 'lượng'}
+                      </b>
                     </div>
                   </div>
                   <p className="mt-8 flex items-start gap-2 text-[10px] leading-4 text-muted-foreground">
@@ -1021,11 +1225,18 @@ export default function MarketDashboard({
                   <Sparkles className="size-4" aria-hidden="true" />
                   {english ? 'Phân tích AI' : 'Phân tích AI'}
                 </p>
-                <h2 id="home-ai-title" className="mt-2 font-heading text-2xl font-semibold tracking-[-0.04em]">
-                  {english ? 'Understand today’s gold price in plain language' : 'Hiểu giá vàng hôm nay bằng lời dễ hiểu'}
+                <h2
+                  id="home-ai-title"
+                  className="mt-2 font-heading text-2xl font-semibold tracking-[-0.04em]"
+                >
+                  {english
+                    ? 'Understand today’s gold price in plain language'
+                    : 'Hiểu giá vàng hôm nay bằng lời dễ hiểu'}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {english ? 'Ask about the gold type you are viewing. You can start without entering personal numbers.' : 'Hỏi về đúng loại vàng bạn đang xem. Bạn có thể bắt đầu mà chưa cần nhập số tiền cá nhân.'}
+                  {english
+                    ? 'Ask about the gold type you are viewing. You can start without entering personal numbers.'
+                    : 'Hỏi về đúng loại vàng bạn đang xem. Bạn có thể bắt đầu mà chưa cần nhập số tiền cá nhân.'}
                 </p>
               </div>
               <AnalysisRouteLink
@@ -1041,35 +1252,54 @@ export default function MarketDashboard({
                 href={analysisHref(companyId, productId, range, 'today')}
                 className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-3 text-sm font-semibold transition-colors hover:border-primary/40"
               >
-                {english ? 'How did today’s price move?' : 'Giá vàng hôm nay biến động thế nào?'}
+                {english
+                  ? 'How did today’s price move?'
+                  : 'Giá vàng hôm nay biến động thế nào?'}
               </Link>
               <Link
                 href={analysisHref(companyId, productId, range, 'buy')}
                 className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-3 text-sm font-semibold transition-colors hover:border-primary/40"
               >
-                {english ? 'I want to buy gold' : 'Tôi muốn mua vàng, cần tính những gì?'}
+                {english
+                  ? 'I want to buy gold'
+                  : 'Tôi muốn mua vàng, cần tính những gì?'}
               </Link>
               <Link
                 href={analysisHref(companyId, productId, range, 'hold')}
                 className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-3 text-sm font-semibold transition-colors hover:border-primary/40"
               >
-                {english ? 'Is my gold holding up or down?' : 'Vàng tôi đang giữ đang lãi hay lỗ?'}
+                {english
+                  ? 'Is my gold holding up or down?'
+                  : 'Vàng tôi đang giữ đang lãi hay lỗ?'}
               </Link>
             </div>
           </section>
 
           <div
             className="market-source-note"
-            aria-label={english ? 'Price-data source' : 'Nguồn dữ liệu bảng giá'}
+            aria-label={
+              english ? 'Price-data source' : 'Nguồn dữ liệu bảng giá'
+            }
           >
             <p>
               <ShieldCheck className="size-3.5 shrink-0 text-emerald-700" />
               {mode === 'fallback'
-                ? english ? 'Latest saved data' : 'Dữ liệu lưu gần nhất'
-                : english ? 'Price source' : 'Nguồn giá'}:{' '}
-              {presentMarketCatalogText(source.provider, locale)} · {english ? 'History' : 'Lịch sử'}:{' '}
-              {presentMarketCatalogText(displayedHistorySource.provider, locale)}.{' '}
-              {english ? 'Refreshes automatically every 4 minutes.' : 'Tự động làm mới mỗi 4 phút.'}
+                ? english
+                  ? 'Latest saved data'
+                  : 'Dữ liệu lưu gần nhất'
+                : english
+                  ? 'Price source'
+                  : 'Nguồn giá'}
+              : {presentMarketCatalogText(source.provider, locale)} ·{' '}
+              {english ? 'History' : 'Lịch sử'}:{' '}
+              {presentMarketCatalogText(
+                displayedHistorySource.provider,
+                locale,
+              )}
+              .{' '}
+              {english
+                ? 'Refreshes automatically every 4 minutes.'
+                : 'Tự động làm mới mỗi 4 phút.'}
             </p>
             <div>
               {source.url ? (
@@ -1101,10 +1331,16 @@ type DashboardControlsProps = {
 
 function DashboardHeaderControls(props: DashboardControlsProps) {
   const { setDashboardActions } = useHeaderActions();
-  const { companyId, productId, range, isRefreshing, onRefresh, locale } = props;
-  const refreshLabel = locale === 'en'
-    ? isRefreshing ? 'Updating prices' : 'Refresh prices'
-    : isRefreshing ? 'Đang cập nhật giá' : 'Làm mới giá';
+  const { companyId, productId, range, isRefreshing, onRefresh, locale } =
+    props;
+  const refreshLabel =
+    locale === 'en'
+      ? isRefreshing
+        ? 'Updating prices'
+        : 'Refresh prices'
+      : isRefreshing
+        ? 'Đang cập nhật giá'
+        : 'Làm mới giá';
   const actions = useMemo(
     () => ({
       analysis: (
@@ -1190,8 +1426,16 @@ function ChangeBadge({
     minimumFractionDigits: 1,
     maximumFractionDigits: 2,
   }).format(change);
-  const unit = displayUnit === 'chi' ? (english ? 'million / chỉ' : 'triệu / chỉ') : (english ? 'million / lượng' : 'triệu / lượng');
-  const direction = value >= 0 ? (english ? 'rose' : 'tăng') : (english ? 'fell' : 'giảm');
+  const unit =
+    displayUnit === 'chi'
+      ? english
+        ? 'million / chỉ'
+        : 'triệu / chỉ'
+      : english
+        ? 'million / lượng'
+        : 'triệu / lượng';
+  const direction =
+    value >= 0 ? (english ? 'rose' : 'tăng') : english ? 'fell' : 'giảm';
   return (
     <span
       aria-label={
@@ -1201,8 +1445,14 @@ function ChangeBadge({
       }
       className={`status-badge ${value >= 0 ? 'status-badge--up' : 'status-badge--down'}`}
     >
-      {value >= 0 ? <ArrowUpRight aria-hidden="true" /> : <ArrowDownRight aria-hidden="true" />}
-      <span>{label} {unit}</span>
+      {value >= 0 ? (
+        <ArrowUpRight aria-hidden="true" />
+      ) : (
+        <ArrowDownRight aria-hidden="true" />
+      )}
+      <span>
+        {label} {unit}
+      </span>
     </span>
   );
 }

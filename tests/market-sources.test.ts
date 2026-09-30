@@ -8,7 +8,10 @@ import {
   getMarketCompany,
   getMarketProduct,
   getMarketProducts,
+  getDefaultMarketProduct,
+  getMarketProductCategory,
   isMarketProductSelectable,
+  getSelectableMarketProducts,
   MARKET_COMPANIES,
   presentMarketCatalogText,
   presentMarketCompany,
@@ -78,11 +81,25 @@ describe('market source registry', () => {
       getMarketProducts('btmh')
         .filter((product) => !isMarketProductSelectable(product))
         .map((product) => product.id),
+    ).toEqual(['btmh-bt24k', 'btmh-vrtl', 'btmh-nl9999', 'btmh-nl999']);
+    expect(getDefaultMarketProduct('btmh')?.id).toBe('btmh-kgb');
+    expect(getSelectableMarketProducts('btmh')).toHaveLength(7);
+    expect(
+      getMarketProducts('btmh').map((product) =>
+        getMarketProductCategory(product),
+      ),
     ).toEqual([
-      'btmh-bt24k',
-      'btmh-vrtl',
-      'btmh-nl9999',
-      'btmh-nl999',
+      'investment-gold',
+      'investment-gold',
+      'gift',
+      'coin',
+      'bar',
+      'jewelry',
+      'jewelry',
+      'jewelry',
+      'ring',
+      'raw-material',
+      'raw-material',
     ]);
   });
 
@@ -103,9 +120,9 @@ describe('market source registry', () => {
       label: 'Nhẫn tròn Phú Quý 999.9 · 0,5 chỉ',
       group: 'Nhẫn tròn Phú Quý 999.9',
     });
-    expect(
-      presentMarketCatalogText('Vàng miếng và nhẫn trơn', 'en'),
-    ).toBe('Gold bar and Plain ring');
+    expect(presentMarketCatalogText('Vàng miếng và nhẫn trơn', 'en')).toBe(
+      'Gold bar and Plain ring',
+    );
     expect(
       presentMarketCatalogText('Vàng.Today · Bản dự phòng cục bộ', 'en'),
     ).toBe('Vang.Today · Local fallback data');
@@ -153,25 +170,26 @@ describe('market source registry', () => {
   });
 
   it('fetches BTMH prices from its own first-party GraphQL adapter', async () => {
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      Response.json({
-        data: {
-          goldRates: {
-            items: [
-              {
-                code: 'KHS',
-                name: 'Đồng vàng Kim Gia Bảo hoa sen',
-                vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
-                buy_price: 14_020_000,
-                sell_price: 14_420_000,
-                unit: 'VND/1 chỉ',
-                weight: '1 chỉ',
-                last_updated: '2026-09-30 15:20:59.0',
-              },
-            ],
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        Response.json({
+          data: {
+            goldRates: {
+              items: [
+                {
+                  code: 'KHS',
+                  name: 'Đồng vàng Kim Gia Bảo hoa sen',
+                  vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
+                  buy_price: 14_020_000,
+                  sell_price: 14_420_000,
+                  unit: 'VND/1 chỉ',
+                  weight: '1 chỉ',
+                  last_updated: '2026-09-30 15:20:59.0',
+                },
+              ],
+            },
           },
-        },
-      }),
+        }),
     );
     vi.stubGlobal('fetch', fetcher);
 
@@ -192,25 +210,26 @@ describe('market source registry', () => {
   });
 
   it('keeps Tiểu Kim Cát at one verified current quote without importing mixed-size history', async () => {
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      Response.json({
-        data: {
-          goldRates: {
-            items: [
-              {
-                code: 'BT-TKC',
-                name: 'Tiểu Kim Cát 24K',
-                vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
-                buy_price: 1_399_000,
-                sell_price: 1_442_000,
-                unit: 'VND/0,1 chỉ',
-                weight: '0,1 chỉ',
-                last_updated: '2026-09-30 15:20:59.0',
-              },
-            ],
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        Response.json({
+          data: {
+            goldRates: {
+              items: [
+                {
+                  code: 'BT-TKC',
+                  name: 'Tiểu Kim Cát 24K',
+                  vendor_name: 'Công ty cổ phần Bảo Tín Mạnh Hải',
+                  buy_price: 1_399_000,
+                  sell_price: 1_442_000,
+                  unit: 'VND/0,1 chỉ',
+                  weight: '0,1 chỉ',
+                  last_updated: '2026-09-30 15:20:59.0',
+                },
+              ],
+            },
           },
-        },
-      }),
+        }),
     );
     vi.stubGlobal('fetch', fetcher);
 
@@ -238,8 +257,7 @@ describe('market source registry', () => {
       mode: 'unavailable',
       availability: 'unavailable',
       product: { id: 'btmh-nl9999' },
-      unavailableReason:
-        'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+      unavailableReason: 'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
     });
     expect(fetcher).not.toHaveBeenCalled();
   });

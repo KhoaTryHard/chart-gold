@@ -1,8 +1,12 @@
 import {
   getMarketCompany,
+  getMarketProductCategory,
+  getMarketProductCompany,
   getMarketProduct,
   getMarketProducts,
+  getDefaultMarketProduct,
   isMarketCompanyId,
+  isMarketProductSelectable,
   isMarketProductId,
 } from '@/lib/market-sources';
 import type { AnalysisRange } from './metrics';
@@ -28,7 +32,10 @@ export type QuestionContext = {
 };
 
 const rangeFromText = (question: string): AnalysisRange | null => {
-  const value = question.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const value = question
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
   if (/7\s*ngay|tuan qua|7 days?|last week/.test(value)) return '7N';
   if (/30\s*ngay|thang qua|30 days?|last month/.test(value)) return '1T';
   if (/365\s*ngay|nam qua|365 days?|last year/.test(value)) return '1N';
@@ -60,8 +67,13 @@ function readCapital(question: string) {
 }
 
 function readHorizon(question: string): ScenarioInputs['horizon'] | undefined {
-  const normalized = question.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const match = normalized.match(/(?:giu|hold|holding|trong|for)\s*(?:khoang|about)?\s*(\d+)\s*(tuan|thang|nam|week|weeks|month|months|year|years)/);
+  const normalized = question
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const match = normalized.match(
+    /(?:giu|hold|holding|trong|for)\s*(?:khoang|about)?\s*(\d+)\s*(tuan|thang|nam|week|weeks|month|months|year|years)/,
+  );
   if (!match) return undefined;
   const amount = Number(match[1]);
   const unit = match[2];
@@ -81,30 +93,87 @@ export function inferQuestionContext(input: {
   productId?: string;
   range?: AnalysisRange;
   locale?: 'vi' | 'en';
-}) : QuestionContext {
+}): QuestionContext {
   const locale = input.locale ?? 'vi';
   const intent = resolveIntent(input.question, []);
-  const explicitCompany = companyFromIntent(intent.companyIds, input.companyId ?? 'sjc');
+  const productCompanies = [
+    ...new Set(
+      intent.productIds
+        .map(getMarketProductCompany)
+        .filter((company) => company !== undefined)
+        .map((company) => company.id),
+    ),
+  ];
+  const productCompany =
+    productCompanies.length === 1 ? productCompanies[0] : undefined;
+  const explicitCompany = companyFromIntent(
+    intent.companyIds,
+    productCompany ?? input.companyId ?? 'sjc',
+  );
   const products = getMarketProducts(explicitCompany);
-  const explicitProduct = intent.productIds.find((id) => isMarketProductId(explicitCompany, id));
-  const normalizedQuestion = input.question.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const mentionsRing = intent.category === 'ring' || /\bnhan\b|\bring\b/.test(normalizedQuestion);
-  const mentionsBar = intent.category === 'bar' || /\bmieng\b|\bbar\b/.test(normalizedQuestion);
-  const shapeProduct = mentionsRing && /(?:\d[\d.,]*\s*(?:luong|tael|chi|phan)|one\s*(?:tael|chi))/.test(normalizedQuestion)
-    ? products.find((item) => item.id === 'ring-1c')?.id
-    : mentionsBar && /1\s*luong|one\s*tael/.test(normalizedQuestion)
-      ? products.find((item) => item.id === 'bar-1l')?.id
-      : undefined;
-  const productId = shapeProduct ?? explicitProduct ?? input.productId ?? products[0]?.id ?? 'bar-1l';
+  const explicitProduct = intent.productIds.find((id) =>
+    isMarketProductId(explicitCompany, id),
+  );
+  const normalizedQuestion = input.question
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const mentionsSizedProduct =
+    /(?:\d[\d.,]*\s*(?:luong|tael|chi|phan)|one\s*(?:tael|chi))/.test(
+      normalizedQuestion,
+    );
+  const shapeProduct =
+    mentionsSizedProduct && intent.category === 'ring'
+      ? (products.find(
+          (item) =>
+            item.id === 'ring-1c' &&
+            getMarketProductCategory(item) === 'ring' &&
+            isMarketProductSelectable(item),
+        )?.id ??
+        products.find(
+          (item) =>
+            getMarketProductCategory(item) === 'ring' &&
+            item.weightInLuong !== null &&
+            isMarketProductSelectable(item),
+        )?.id)
+      : mentionsSizedProduct && intent.category === 'bar'
+        ? (products.find(
+            (item) =>
+              item.id === 'bar-1l' &&
+              getMarketProductCategory(item) === 'bar' &&
+              isMarketProductSelectable(item),
+          )?.id ??
+          products.find(
+            (item) =>
+              getMarketProductCategory(item) === 'bar' &&
+              item.weightInLuong !== null &&
+              isMarketProductSelectable(item),
+          )?.id)
+        : undefined;
+  const validInputProduct = isMarketProductId(explicitCompany, input.productId)
+    ? input.productId
+    : undefined;
+  const productId =
+    explicitProduct ??
+    shapeProduct ??
+    validInputProduct ??
+    getDefaultMarketProduct(explicitCompany)?.id ??
+    'bar-1l';
   const questionRange = rangeFromText(input.question);
   const range = questionRange ?? input.range ?? '1T';
   const parsed = investmentInputs(input.question);
   const scenarioInputs: ScenarioInputs = {
     ...(parsed.quantityLuong ? { quantityLuong: parsed.quantityLuong } : {}),
-    ...(parsed.costPerLuongVnd ? { costPerLuongVnd: parsed.costPerLuongVnd } : {}),
+    ...(parsed.costPerLuongVnd
+      ? { costPerLuongVnd: parsed.costPerLuongVnd }
+      : {}),
     ...(parsed.feesVnd !== undefined ? { feeVnd: parsed.feesVnd } : {}),
-    ...(readCapital(input.question) ? { capitalVnd: readCapital(input.question) } : {}),
-    ...(readHorizon(input.question) ? { horizon: readHorizon(input.question) } : {}),
+    ...(readCapital(input.question)
+      ? { capitalVnd: readCapital(input.question) }
+      : {}),
+    ...(readHorizon(input.question)
+      ? { horizon: readHorizon(input.question) }
+      : {}),
   };
   const missing: QuestionContextNeed[] = [];
   const productMentioned = Boolean(explicitProduct || shapeProduct);
@@ -112,21 +181,43 @@ export function inferQuestionContext(input: {
     missing.push({
       key: 'product',
       label: locale === 'en' ? 'Product' : 'Loại vàng',
-      reason: locale === 'en' ? 'Name the gold product or brand you want to analyze.' : 'Hãy nêu loại vàng hoặc thương hiệu bạn muốn phân tích.',
+      reason:
+        locale === 'en'
+          ? 'Name the gold product or brand you want to analyze.'
+          : 'Hãy nêu loại vàng hoặc thương hiệu bạn muốn phân tích.',
     });
   }
-  if (input.goal === 'buy' && !scenarioInputs.quantityLuong && !scenarioInputs.capitalVnd) {
+  if (
+    input.goal === 'buy' &&
+    !scenarioInputs.quantityLuong &&
+    !scenarioInputs.capitalVnd
+  ) {
     missing.push({
       key: 'quantityLuong',
       label: locale === 'en' ? 'Purchase size' : 'Quy mô mua',
-      reason: locale === 'en' ? 'Add a quantity or budget so break-even can be calculated.' : 'Hãy thêm số lượng hoặc ngân sách để tính hòa vốn.',
+      reason:
+        locale === 'en'
+          ? 'Add a quantity or budget so break-even can be calculated.'
+          : 'Hãy thêm số lượng hoặc ngân sách để tính hòa vốn.',
     });
   }
-  if (input.goal === 'buy' && /nen mua|mua ngay|should i buy|buy now|dau tu/.test(input.question.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()) && !scenarioInputs.horizon) {
+  if (
+    input.goal === 'buy' &&
+    /nen mua|mua ngay|should i buy|buy now|dau tu/.test(
+      input.question
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase(),
+    ) &&
+    !scenarioInputs.horizon
+  ) {
     missing.push({
       key: 'horizon',
       label: locale === 'en' ? 'Holding period' : 'Thời gian dự định giữ',
-      reason: locale === 'en' ? 'Add how long you plan to hold it.' : 'Hãy thêm thời gian bạn dự định giữ vàng.',
+      reason:
+        locale === 'en'
+          ? 'Add how long you plan to hold it.'
+          : 'Hãy thêm thời gian bạn dự định giữ vàng.',
     });
   }
   const company = getMarketCompany(explicitCompany);

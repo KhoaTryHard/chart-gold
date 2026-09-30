@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { useLocale } from '@/components/locale-provider';
 import {
   MARKET_COMPANIES,
+  getDefaultMarketProduct,
   getMarketProducts,
+  isMarketProductSelectable,
   presentMarketCompany,
   presentMarketProduct,
 } from '@/lib/market-sources';
@@ -106,7 +108,8 @@ export function InvestorProfileForm({
       };
 
   const validationMessage = (message?: string) => {
-    if (message === 'Sản phẩm nắm giữ không hợp lệ.') return copy.invalidProduct;
+    if (message === 'Sản phẩm nắm giữ không hợp lệ.')
+      return copy.invalidProduct;
     if (message === 'Tiền cần giữ không được vượt vốn dự kiến.')
       return copy.cashExceedsCapital;
     return copy.invalidProfile;
@@ -230,7 +233,8 @@ export function InvestorProfileForm({
                         ? {
                             ...item,
                             companyId,
-                            productId: getMarketProducts(companyId)[0].id,
+                            productId:
+                              getDefaultMarketProduct(companyId)?.id ?? '',
                           }
                         : item,
                     ),
@@ -261,8 +265,22 @@ export function InvestorProfileForm({
                 }
               >
                 {getMarketProducts(holding.companyId).map((product) => (
-                  <option key={product.id} value={product.id}>
+                  <option
+                    key={product.id}
+                    value={product.id}
+                    disabled={!isMarketProductSelectable(product)}
+                    title={
+                      'unavailableReason' in product
+                        ? product.unavailableReason
+                        : undefined
+                    }
+                  >
                     {presentMarketProduct(product, locale).shortLabel}
+                    {!isMarketProductSelectable(product)
+                      ? english
+                        ? ' · unavailable'
+                        : ' · chưa đủ báo giá'
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -343,7 +361,9 @@ export function InvestorProfileForm({
             size="sm"
             disabled={disabled}
             aria-label={
-              english ? 'Delete saved investment profile' : 'Xóa hồ sơ đầu tư đã lưu'
+              english
+                ? 'Delete saved investment profile'
+                : 'Xóa hồ sơ đầu tư đã lưu'
             }
             onClick={() => {
               try {

@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}), { virtual: true });
 
 import {
+  getDefaultMarketProduct,
+  getMarketProductCategory,
   getMarketProduct,
   getMarketProducts,
+  getSelectableMarketProducts,
   isMarketProductSelectable,
 } from '@/lib/market-sources';
 import {
@@ -26,9 +29,15 @@ import {
 describe('brand-specific product catalogs', () => {
   it('keeps PNJ product categories tied to its official product labels', () => {
     const products = getMarketProducts('pnj');
-    expect(products.some((product) => product.id === 'pnj-ring-9999')).toBe(true);
-    expect(products.some((product) => product.id === 'pnj-gold-750')).toBe(true);
-    expect(products.some((product) => product.id === 'pnj-sjc-hanoi')).toBe(true);
+    expect(products.some((product) => product.id === 'pnj-ring-9999')).toBe(
+      true,
+    );
+    expect(products.some((product) => product.id === 'pnj-gold-750')).toBe(
+      true,
+    );
+    expect(products.some((product) => product.id === 'pnj-sjc-hanoi')).toBe(
+      true,
+    );
   });
 
   it('parses official PNJ current and historical rows by location and label', () => {
@@ -62,8 +71,16 @@ describe('brand-specific product catalogs', () => {
               {
                 name: 'Nhẫn Trơn PNJ 999.9',
                 data: [
-                  { gia_mua: '144.000', gia_ban: '147.300', updated_at: '03/09/2026 08:41:36' },
-                  { gia_mua: '145.000', gia_ban: '148.300', updated_at: '03/09/2026 15:28:35' },
+                  {
+                    gia_mua: '144.000',
+                    gia_ban: '147.300',
+                    updated_at: '03/09/2026 08:41:36',
+                  },
+                  {
+                    gia_mua: '145.000',
+                    gia_ban: '148.300',
+                    updated_at: '03/09/2026 15:28:35',
+                  },
                 ],
               },
             ],
@@ -106,7 +123,10 @@ describe('brand-specific product catalogs', () => {
   });
 
   it('keeps VGJ product-size groupings and only accepts two-sided official quotes', () => {
-    const product = getMarketProduct('vgj', 'vgj-ring-9999-1-2-5c') as VgjProduct;
+    const product = getMarketProduct(
+      'vgj',
+      'vgj-ring-9999-1-2-5c',
+    ) as VgjProduct;
     const quote = parseVgjQuoteFromHtml(
       product,
       '<script>"purchase":144900000,"sell":147900000,"title":"Vàng nhẫn VGJ 99.99 dạng 1 chỉ, 2 chỉ, 5 chỉ"</script>',
@@ -115,6 +135,36 @@ describe('brand-specific product catalogs', () => {
 
     const unavailable = getMarketProduct('phuquy', 'phuquy-non-sjc-9999');
     expect(isMarketProductSelectable(unavailable)).toBe(false);
+  });
+
+  it('shares BTMH product categories and only enables the seven two-sided rows', () => {
+    const all = getMarketProducts('btmh');
+    expect(all).toHaveLength(11);
+    expect(
+      getSelectableMarketProducts('btmh').map((product) => product.id),
+    ).toEqual([
+      'btmh-kgb',
+      'btmh-bt-tkc',
+      'btmh-kgbg',
+      'btmh-khs',
+      'btmh-sjc9999',
+      'btmh-9999',
+      'btmh-999',
+    ]);
+    expect(getDefaultMarketProduct('btmh')?.id).toBe('btmh-kgb');
+    expect(all.map((product) => getMarketProductCategory(product))).toEqual([
+      'investment-gold',
+      'investment-gold',
+      'gift',
+      'coin',
+      'bar',
+      'jewelry',
+      'jewelry',
+      'jewelry',
+      'ring',
+      'raw-material',
+      'raw-material',
+    ]);
   });
 
   it('normalizes BTMH prices by the official unit and rejects incomplete rows', () => {
@@ -189,7 +239,9 @@ describe('brand-specific product catalogs', () => {
       },
     };
     expect(() => parseBtmhQuote(invalid, kimGiaBao)).toThrow();
-    expect(() => parseBtmhQuote({ ...invalid, errors: [{ message: 'no' }] }, kimGiaBao)).toThrow();
+    expect(() =>
+      parseBtmhQuote({ ...invalid, errors: [{ message: 'no' }] }, kimGiaBao),
+    ).toThrow();
     expect(() =>
       parseBtmhQuote(
         {
@@ -212,9 +264,7 @@ describe('brand-specific product catalogs', () => {
 
   it('splits BTMH history at New Year and never relabels another product or year', () => {
     const product = getMarketProduct('btmh', 'btmh-kgb') as BtmhProduct;
-    expect(
-      splitBtmhHistoryWindows('2025-12-30', '2026-01-02'),
-    ).toEqual([
+    expect(splitBtmhHistoryWindows('2025-12-30', '2026-01-02')).toEqual([
       { start: '2025-12-30', end: '2025-12-31' },
       { start: '2026-01-01', end: '2026-01-02' },
     ]);
@@ -235,16 +285,16 @@ describe('brand-specific product catalogs', () => {
       product,
       { start: '2025-12-30', end: '2025-12-31' },
     );
-    expect(points).toMatchObject([
-      { date: '2025-12-31', buy: 130, sell: 134 },
-    ]);
+    expect(points).toMatchObject([{ date: '2025-12-31', buy: 130, sell: 134 }]);
     expect(() =>
       parseBtmhHistoryPoints(
         {
           data: {
             goldChartData: {
               default_product: 'KGBG',
-              data_points: [{ date: '31/12', buy: 13_000_000, sell: 13_400_000 }],
+              data_points: [
+                { date: '31/12', buy: 13_000_000, sell: 13_400_000 },
+              ],
             },
           },
         },

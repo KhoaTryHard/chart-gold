@@ -4,14 +4,38 @@ import type { Locale } from '@/lib/i18n';
 
 const englishCatalogPhrases: readonly [RegExp, string][] = [
   [/Vàng\.Today/gi, 'Vang.Today'],
-  [/Không thể tải dữ liệu cho lựa chọn này\. Không có snapshot thay thế để tránh hiển thị giá không xác thực\./gi, 'Unable to load data for this selection. No backup snapshot is available, to avoid showing an unverified price.'],
-  [/Phú Quý công bố định lượng nhưng chưa có dòng giá hai chiều tương ứng\./gi, 'Phú Quý lists the product size but does not yet publish matching buy and sell quotes.'],
-  [/Trang giá VGJ hiện công bố dòng này nhưng chưa có giá mua và bán\./gi, 'VGJ lists this product, but buy and sell quotes are not yet available.'],
-  [/Trang giá Phú Quý hiện chỉ công bố giá mua cho dòng này\./gi, 'Phú Quý currently publishes only a dealer buy quote for this product.'],
-  [/Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này\./gi, 'BTMC currently publishes only a dealer buy quote for this product.'],
-  [/Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này\./gi, 'BTMH currently publishes only a dealer buy quote for this product.'],
-  [/Chưa có lịch sử Tiểu Kim Cát đã xác minh; giá hiện tại chưa tải được\./gi, 'No verified Tieu Kim Cat history is available and its current price could not be loaded.'],
-  [/chưa chuẩn hóa giá theo ([\d.,]+) chỉ/gi, 'the price has not been normalized to $1 chỉ'],
+  [
+    /Không thể tải dữ liệu cho lựa chọn này\. Không có snapshot thay thế để tránh hiển thị giá không xác thực\./gi,
+    'Unable to load data for this selection. No backup snapshot is available, to avoid showing an unverified price.',
+  ],
+  [
+    /Phú Quý công bố định lượng nhưng chưa có dòng giá hai chiều tương ứng\./gi,
+    'Phú Quý lists the product size but does not yet publish matching buy and sell quotes.',
+  ],
+  [
+    /Trang giá VGJ hiện công bố dòng này nhưng chưa có giá mua và bán\./gi,
+    'VGJ lists this product, but buy and sell quotes are not yet available.',
+  ],
+  [
+    /Trang giá Phú Quý hiện chỉ công bố giá mua cho dòng này\./gi,
+    'Phú Quý currently publishes only a dealer buy quote for this product.',
+  ],
+  [
+    /Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này\./gi,
+    'BTMC currently publishes only a dealer buy quote for this product.',
+  ],
+  [
+    /Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này\./gi,
+    'BTMH currently publishes only a dealer buy quote for this product.',
+  ],
+  [
+    /Chưa có lịch sử Tiểu Kim Cát đã xác minh; giá hiện tại chưa tải được\./gi,
+    'No verified Tieu Kim Cat history is available and its current price could not be loaded.',
+  ],
+  [
+    /chưa chuẩn hóa giá theo ([\d.,]+) chỉ/gi,
+    'the price has not been normalized to $1 chỉ',
+  ],
   [/chưa có giá mua và bán/gi, 'buy and sell quotes are not yet available'],
   [/chưa có dữ liệu hai chiều/gi, 'two-sided price data is not yet available'],
   [/chưa xác minh nguồn trực tiếp/gi, 'direct source is unverified'],
@@ -23,6 +47,10 @@ const englishCatalogPhrases: readonly [RegExp, string][] = [
   [/chưa khả dụng/gi, 'unavailable'],
   [/theo tuổi vàng/gi, 'by purity'],
   [/theo khu vực/gi, 'by region'],
+  [/vàng tích lũy/gi, 'investment gold'],
+  [/vàng nguyên liệu/gi, 'raw gold'],
+  [/Đồng vàng/gi, 'Gold coin'],
+  [/Tiểu Kim Cát/gi, 'Tieu Kim Cat'],
   [/Nhẫn trơn và vàng tài lộc/gi, 'Plain rings and auspicious gold'],
   [/Quà mừng Bản vị vàng BTMC/gi, 'BTMC Gold Standard Celebration Gift'],
   [/Trang sức Vàng Rồng Thăng Long/gi, 'VRTL jewelry'],
@@ -33,7 +61,10 @@ const englishCatalogPhrases: readonly [RegExp, string][] = [
   [/Tây Nguyên/gi, 'Central Highlands'],
   [/Hà Nội/gi, 'Hanoi'],
   [/Đà Nẵng/gi, 'Da Nang'],
-  [/SJC (Ho Chi Minh City|Hanoi|Da Nang|Mekong Delta|Central Highlands|Southeast region) (?:tại|at) PNJ/gi, 'SJC gold bar at PNJ · $1'],
+  [
+    /SJC (Ho Chi Minh City|Hanoi|Da Nang|Mekong Delta|Central Highlands|Southeast region) (?:tại|at) PNJ/gi,
+    'SJC gold bar at PNJ · $1',
+  ],
   [/Nhẫn tròn trơn/gi, 'Plain ring'],
   [/Vàng nhẫn trơn/gi, 'Plain gold ring'],
   [/Vàng miếng/gi, 'Gold bar'],
@@ -60,11 +91,17 @@ const englishCatalogPhrases: readonly [RegExp, string][] = [
   [/Bản dự phòng cục bộ/gi, 'Local fallback data'],
   [/Bản lịch sử dự phòng/gi, 'Historical fallback data'],
   [/Chưa có dữ liệu lịch sử khả dụng/gi, 'No history data is available'],
-  [/Nguồn chưa trả dữ liệu hai chiều\./gi, 'The source has not returned both buy and sell prices.'],
+  [
+    /Nguồn chưa trả dữ liệu hai chiều\./gi,
+    'The source has not returned both buy and sell prices.',
+  ],
 ];
 
 /** Localizes catalog copy for display without changing the source registry. */
-export function presentMarketCatalogText(value: string, locale: Locale): string {
+export function presentMarketCatalogText(
+  value: string,
+  locale: Locale,
+): string {
   if (locale === 'vi') return value;
   return englishCatalogPhrases.reduce(
     (text, [pattern, replacement]) => text.replace(pattern, replacement),
@@ -99,7 +136,12 @@ export function presentMarketProduct(
     group: presentMarketCatalogText(product.group, locale),
     unitLabel: presentMarketCatalogText(product.unitLabel, locale),
     ...('unavailableReason' in product && product.unavailableReason
-      ? { unavailableReason: presentMarketCatalogText(product.unavailableReason, locale) }
+      ? {
+          unavailableReason: presentMarketCatalogText(
+            product.unavailableReason,
+            locale,
+          ),
+        }
       : {}),
   };
 }
@@ -261,6 +303,16 @@ export const MARKET_COMPANIES = [
 export type MarketCompany = (typeof MARKET_COMPANIES)[number];
 export type MarketCompanyId = MarketCompany['id'];
 
+export type MarketProductCategory =
+  | 'bar'
+  | 'ring'
+  | 'investment-gold'
+  | 'gift'
+  | 'jewelry'
+  | 'coin'
+  | 'raw-material'
+  | 'other';
+
 export type AggregatedMarketProduct = {
   id: string;
   companyId: Exclude<MarketCompanyId, 'sjc'>;
@@ -271,6 +323,10 @@ export type AggregatedMarketProduct = {
   /** Vang.Today code. Official adapters intentionally use null here. */
   upstreamCode: string | null;
   seriesId: string;
+  /** Shared product category used by the market, ledger, and analysis flows. */
+  category?: MarketProductCategory;
+  /** Short first-party names and quote codes users commonly type. */
+  searchAliases?: readonly string[];
   weightInLuong: number | null;
   officialMatch: string | null;
   /** Exact location/group label used by a first-party product API. */
@@ -548,8 +604,7 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     weightInLuong: 1,
     officialMatch: 'VÀNG HỆ THỐNG',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'btmc-raw-9999',
@@ -563,8 +618,7 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     weightInLuong: 1,
     officialMatch: 'VÀNG NGUYÊN LIỆU',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMC hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'btmc-sjc',
@@ -615,6 +669,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'investment-gold',
+    searchAliases: ['KGB', 'Kim Gia Bảo'],
     weightInLuong: 0.1,
     officialMatch: 'Kim Gia Bảo 24K',
     officialKey: 'KGB',
@@ -628,6 +684,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '0,1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'investment-gold',
+    searchAliases: ['BT-TKC', 'Tiểu Kim Cát'],
     weightInLuong: 0.01,
     officialMatch: 'Tiểu Kim Cát 24K',
     officialKey: 'BT-TKC',
@@ -641,6 +699,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'gift',
+    searchAliases: ['KGBG', 'Kim Gia Bảo Gift'],
     weightInLuong: 0.1,
     officialMatch: 'Kim Gia Bảo Gift 24K',
     officialKey: 'KGBG',
@@ -654,6 +714,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'coin',
+    searchAliases: ['KHS', 'Kim Gia Bảo hoa sen'],
     weightInLuong: 0.1,
     officialMatch: 'Đồng vàng Kim Gia Bảo hoa sen',
     officialKey: 'KHS',
@@ -667,6 +729,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'bar',
+    searchAliases: ['SJC9999'],
     weightInLuong: 0.1,
     officialMatch: 'Vàng miếng SJC (Cty CP BTMH)',
     officialKey: 'SJC9999',
@@ -680,6 +744,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'jewelry',
+    searchAliases: ['9999'],
     weightInLuong: 0.1,
     officialMatch: 'Vàng trang sức 24K (999.9)',
     officialKey: '9999',
@@ -693,6 +759,8 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: '1 chỉ',
     upstreamCode: null,
     seriesId: 'btmh',
+    category: 'jewelry',
+    searchAliases: ['999'],
     weightInLuong: 0.1,
     officialMatch: 'Vàng trang sức 24K 999',
     officialKey: '999',
@@ -706,12 +774,13 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: 'Chưa xác minh quy cách',
     upstreamCode: null,
     seriesId: 'unavailable',
+    category: 'jewelry',
+    searchAliases: ['BT24K'],
     weightInLuong: null,
     officialMatch: 'Trang sức - Nhẫn tròn BTMH',
     officialKey: 'BT24K',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'btmh-vrtl',
@@ -722,12 +791,13 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: 'Chưa xác minh quy cách',
     upstreamCode: null,
     seriesId: 'unavailable',
+    category: 'ring',
+    searchAliases: ['VRTL'],
     weightInLuong: null,
     officialMatch: 'Nhẫn ép vỉ Vàng Rồng Thăng Long',
     officialKey: 'VRTL',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'btmh-nl9999',
@@ -738,12 +808,13 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: 'Chưa xác minh quy cách',
     upstreamCode: null,
     seriesId: 'unavailable',
+    category: 'raw-material',
+    searchAliases: ['NL9999'],
     weightInLuong: null,
     officialMatch: 'Vàng nguyên liệu (999.9)',
     officialKey: 'NL9999',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'btmh-nl999',
@@ -754,12 +825,13 @@ export const OFFICIAL_MARKET_PRODUCTS: readonly AggregatedMarketProduct[] = [
     unitLabel: 'Chưa xác minh quy cách',
     upstreamCode: null,
     seriesId: 'unavailable',
+    category: 'raw-material',
+    searchAliases: ['NL999'],
     weightInLuong: null,
     officialMatch: 'Vàng nguyên liệu (999)',
     officialKey: 'NL999',
     catalogStatus: 'unavailable',
-    unavailableReason:
-      'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
+    unavailableReason: 'Bảng giá BTMH hiện chỉ công bố giá mua cho dòng này.',
   },
   {
     id: 'phuquy-bar',
@@ -1153,7 +1225,9 @@ export function getMarketCompany(
   );
 }
 
-export function isMarketCompanyId(value: string | null | undefined): value is MarketCompanyId {
+export function isMarketCompanyId(
+  value: string | null | undefined,
+): value is MarketCompanyId {
   return MARKET_COMPANIES.some((company) => company.id === value);
 }
 
@@ -1171,11 +1245,38 @@ export function getMarketProduct(
   return products.find((product) => product.id === productId) ?? products[0];
 }
 
+/** Return every catalog row for the brand that has a verified quote contract. */
+export function getSelectableMarketProducts(
+  companyId: string | null | undefined,
+) {
+  return getMarketProducts(companyId).filter(isMarketProductSelectable);
+}
+
+/** Keep manual-entry-only brands usable while preferring a verified row. */
+export function getDefaultMarketProduct(companyId: string | null | undefined) {
+  const products = getMarketProducts(companyId);
+  return products.find(isMarketProductSelectable) ?? products[0];
+}
+
 export function isMarketProductId(
   companyId: string | null | undefined,
   productId: string | null | undefined,
 ): productId is string {
-  return getMarketProducts(companyId).some((product) => product.id === productId);
+  return getMarketProducts(companyId).some(
+    (product) => product.id === productId,
+  );
+}
+
+export function isSelectableMarketProductId(
+  companyId: string | null | undefined,
+  productId: string | null | undefined,
+) {
+  return (
+    isMarketProductId(companyId, productId) &&
+    getSelectableMarketProducts(companyId).some(
+      (product) => product.id === productId,
+    )
+  );
 }
 
 export function getMarketProductCompany(productId: string | null | undefined) {
@@ -1185,7 +1286,38 @@ export function getMarketProductCompany(productId: string | null | undefined) {
 }
 
 export function isMarketProductSelectable(product: MarketProduct) {
-  return !('catalogStatus' in product && product.catalogStatus === 'unavailable');
+  return !(
+    'catalogStatus' in product && product.catalogStatus === 'unavailable'
+  );
+}
+
+/** One shared product category for selectors, comparison, and AI filtering. */
+export function getMarketProductCategory(
+  product: MarketProduct,
+): MarketProductCategory {
+  if ('category' in product && product.category) return product.category;
+  if ('seriesId' in product && product.seriesId === 'bar') return 'bar';
+  if ('seriesId' in product && product.seriesId === 'ring') return 'ring';
+  const label = `${product.group} ${product.label} ${product.id}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (
+    /sjc theo khu vuc|sjc (?:ho chi minh|hanoi|da nang|mien tay|tay nguyen|dong nam bo)/.test(
+      label,
+    )
+  )
+    return 'bar';
+  if (/mieng.*nhan|nhan.*mieng/.test(label)) return 'other';
+  if (/nguyen lieu|raw material/.test(label)) return 'raw-material';
+  if (/dong vang|coin/.test(label)) return 'coin';
+  if (/gift|qua tang|qua mung/.test(label)) return 'gift';
+  if (/tich luy|accumulation|kim gia bao|tieu kim cat/.test(label))
+    return 'investment-gold';
+  if (/nhan|ring/.test(label)) return 'ring';
+  if (/mieng|bar/.test(label)) return 'bar';
+  if (/nu trang|trang suc|jewell?ry/.test(label)) return 'jewelry';
+  return 'other';
 }
 
 export function getMarketHistoryCapability(

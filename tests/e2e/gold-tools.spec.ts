@@ -121,7 +121,10 @@ test('starts with a plain-language intent picker and focuses one tool for a firs
   await page.goto('/cong-cu-vang');
 
   await expect(
-    page.getByRole('heading', { name: 'Bạn muốn làm gì với vàng?', exact: true }),
+    page.getByRole('heading', {
+      name: 'Bạn muốn làm gì với vàng?',
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Tôi muốn mua vàng/ }),
@@ -158,17 +161,19 @@ test('keeps the first-time mobile flow readable without horizontal scrolling', a
   await page.goto('/cong-cu-vang');
 
   await expect(
-    page.getByRole('heading', { name: 'Bạn muốn làm gì với vàng?', exact: true }),
+    page.getByRole('heading', {
+      name: 'Bạn muốn làm gì với vàng?',
+      exact: true,
+    }),
   ).toBeVisible();
   const metrics = await page.evaluate(() => ({
     viewport: window.innerWidth,
     scrollWidth: document.documentElement.scrollWidth,
   }));
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.viewport + 1);
-  await expect(page.getByRole('button', { name: /Tôi muốn mua vàng/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    page.getByRole('button', { name: /Tôi muốn mua vàng/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('does not show a zero result before a calculator input is complete', async ({
@@ -206,8 +211,69 @@ test('does not show a zero result before a calculator input is complete', async 
     page.getByText('Tiền bạn nhận sau phí', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('[aria-live="polite"]').filter({ hasText: 'Tiền bạn nhận sau phí' }).last(),
+    page
+      .locator('[aria-live="polite"]')
+      .filter({ hasText: 'Tiền bạn nhận sau phí' })
+      .last(),
   ).toContainText('29.000.000 đ');
+});
+
+test('uses the shared BTMH product groups in the calculator and carries a valid link', async ({
+  page,
+}) => {
+  await page.route('**/api/sjc*', (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: 'available',
+        mode: 'live',
+        company: { id: url.searchParams.get('company') },
+        product: { id: url.searchParams.get('product') },
+        latest: { buy: 139.9, sell: 143.9 },
+        observedAt: '2026-09-30T08:20:53.000Z',
+        source: { provider: 'Bảo Tín Mạnh Hải official', url: null },
+      }),
+    });
+  });
+  await page.goto(
+    '/cong-cu-vang?tool=lai-lo&company=btmh&product=btmh-kgb&quantity=1&unit=chi&cost=140000000',
+  );
+
+  const product = page.getByLabel('Sản phẩm đang giữ');
+  await expect(product).toHaveValue('btmh:btmh-kgb');
+  await expect(
+    product.locator('option[value="btmh:btmh-bt-tkc"]'),
+  ).toBeEnabled();
+  await expect(product.locator('option[value="btmh:btmh-kgbg"]')).toBeEnabled();
+  await expect(product.locator('option[value="btmh:btmh-khs"]')).toBeEnabled();
+  await expect(
+    product.locator('option[value="btmh:btmh-sjc9999"]'),
+  ).toBeEnabled();
+  await expect(product.locator('option[value="btmh:btmh-9999"]')).toBeEnabled();
+  await expect(product.locator('option[value="btmh:btmh-999"]')).toBeEnabled();
+  for (const id of ['btmh-bt24k', 'btmh-vrtl', 'btmh-nl9999', 'btmh-nl999']) {
+    await expect(product.locator(`option[value="btmh:${id}"]`)).toHaveAttribute(
+      'disabled',
+      '',
+    );
+  }
+  await expect(page.locator('#calculator-buy-venue')).toHaveValue('btmh');
+  await expect(page.locator('#calculator-sell-venue')).toHaveValue('btmh');
+  await expect(page.locator('#purchase-1-price')).toHaveValue('140000000');
+
+  await page.getByLabel('Sản phẩm đang giữ').selectOption('btmh:btmh-kgbg');
+  await expect(page.locator('#calculator-buy-venue')).toHaveValue('btmh');
+  await page.goto(
+    '/cong-cu-vang?tool=lai-lo&company=btmh&product=btmh-nl9999&quantity=1&unit=chi&cost=140000000',
+  );
+  await expect(
+    page.getByText(
+      'Sản phẩm trong liên kết không có báo giá khả dụng. Hãy chọn sản phẩm khác để tiếp tục.',
+    ),
+  ).toBeVisible();
+  await expect(page.locator('#purchase-1-quantity')).toHaveValue('');
 });
 
 test('merges comparison and calculator into one route', async ({ page }) => {

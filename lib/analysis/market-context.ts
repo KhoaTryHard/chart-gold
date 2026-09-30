@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   MARKET_COMPANIES,
+  getMarketProductCategory,
   getMarketProducts,
   getMarketProduct,
   type MarketProduct,
@@ -56,13 +57,9 @@ export function selectQuoteGroups(
       if (intent.scope === 'selected' && product.id !== productId) continue;
       if (intent.productIds.length && !intent.productIds.includes(product.id))
         continue;
-      const text = normalizeQuestion(`${product.group} ${product.label}`);
-      if (intent.category === 'ring' && !/nhan/.test(text)) continue;
-      if (intent.category === 'bar' && !/mieng|sjc theo khu vuc/.test(text))
-        continue;
       if (
-        intent.category === 'jewelry' &&
-        !/nu trang|trang suc|\d+k\b/.test(text)
+        intent.category &&
+        getMarketProductCategory(product) !== intent.category
       )
         continue;
       const key = quoteKey(company.id, product);
@@ -153,9 +150,9 @@ export function buildMarketContext(
   };
   const hasExplicitInvestment = Boolean(
     scenarioInputs?.quantityLuong ||
-      scenarioInputs?.costPerLuongVnd ||
-      parsedInputs.quantityLuong ||
-      parsedInputs.costPerLuongVnd,
+    scenarioInputs?.costPerLuongVnd ||
+    parsedInputs.quantityLuong ||
+    parsedInputs.costPerLuongVnd,
   );
   groups.forEach((group, index) => {
     const market = markets[index];
@@ -450,43 +447,62 @@ export function factualAnswer(
 ) {
   if (locale === 'en') {
     const formatEnglish = (n: number | null) =>
-      n === null ? '—' : n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+      n === null
+        ? '—'
+        : n.toLocaleString('en-US', { maximumFractionDigits: 4 });
     const portfolio = context.portfolioSummary;
     const forecastText = forecast
       ? forecast.status === 'experimental'
         ? `\n\n### Seven-day forecast — target ${forecast.targetDate}\n\n- Method: historical seven-day change quantiles from ${forecast.observationCount} observations and ${forecast.pairCount} pairs.\n- Downside: dealer buy ${formatEnglish(forecast.ranges[0]?.buyVndPerLuong ?? null)} VND/lượng; dealer sell ${formatEnglish(forecast.ranges[0]?.sellVndPerLuong ?? null)} VND/lượng.\n- Base: dealer buy ${formatEnglish(forecast.ranges[1]?.buyVndPerLuong ?? null)} VND/lượng; dealer sell ${formatEnglish(forecast.ranges[1]?.sellVndPerLuong ?? null)} VND/lượng.\n- Upside: dealer buy ${formatEnglish(forecast.ranges[2]?.buyVndPerLuong ?? null)} VND/lượng; dealer sell ${formatEnglish(forecast.ranges[2]?.sellVndPerLuong ?? null)} VND/lượng.\n- Experimental estimate, not a probability or guaranteed target.`
         : `\n\n### Seven-day forecast — target ${forecast.targetDate}\n\n- ${forecast.reason ?? 'There is not enough verified history for a numeric range.'}`
       : '';
-    const portfolioText = portfolio && intent.kind === 'investment'
-      ? `\n\n### Your gold ledger today\n\n- Bought ${formatEnglish(portfolio.totalBoughtLuong)} lượng, sold ${formatEnglish(portfolio.totalSoldLuong)} lượng; currently holding ${formatEnglish(portfolio.openQuantityLuong)} lượng.\n- Realized profit/loss: ${formatEnglish(portfolio.realizedPnlVnd)} VND.\n- Estimated profit/loss at the displayed dealer buy price: ${formatEnglish(portfolio.unrealizedPnlVnd)} VND.\n- This is an estimate, not a confirmed buyback offer; verify the product and conditions with the dealer.${portfolio.errors.length ? `\n- Ledger warnings: ${portfolio.errors.length} issue(s) need review.` : ''}`
-      : '';
+    const portfolioText =
+      portfolio && intent.kind === 'investment'
+        ? `\n\n### Your gold ledger today\n\n- Bought ${formatEnglish(portfolio.totalBoughtLuong)} lượng, sold ${formatEnglish(portfolio.totalSoldLuong)} lượng; currently holding ${formatEnglish(portfolio.openQuantityLuong)} lượng.\n- Realized profit/loss: ${formatEnglish(portfolio.realizedPnlVnd)} VND.\n- Estimated profit/loss at the displayed dealer buy price: ${formatEnglish(portfolio.unrealizedPnlVnd)} VND.\n- This is an estimate, not a confirmed buyback offer; verify the product and conditions with the dealer.${portfolio.errors.length ? `\n- Ledger warnings: ${portfolio.errors.length} issue(s) need review.` : ''}`
+        : '';
     if (!context.ranking.length)
       return `There is not enough data to conclude across ${context.requested} checked groups.${forecastText}${portfolioText}\n\n${context.missing.map((item) => `- ${item.label}: no usable price data is available.`).join('\n')}`;
-    const side = intent.side === 'buy' ? 'dealer sell price' : 'dealer buy price';
-    const winners = context.ranking.filter((row) => row.rank === 1).map((row) => row.label).join(', ');
+    const side =
+      intent.side === 'buy' ? 'dealer sell price' : 'dealer buy price';
+    const winners = context.ranking
+      .filter((row) => row.rank === 1)
+      .map((row) => row.label)
+      .join(', ');
     const rankingDescription = intent.daily
       ? 'show the largest price movement'
-      : intent.order === 'asc' ? 'have the lowest price' : 'have the highest price';
-    const intro = intent.kind === 'comparison'
-      ? `Among ${context.eligible}/${context.requested} groups with sufficient data, **${winners}** ${rankingDescription} by ${side}.\n\n`
-      : `Verified data for ${context.eligible}/${context.requested} product groups:\n\n`;
-    const rows = context.ranking.slice(0, 10).map((rank) => {
-      const row = context.rows.find((item) => item.key === rank.key)!;
-      return `| ${rank.label} | ${formatEnglish(row.comparison?.today ?? null)} | ${formatEnglish(rank.change)} | ${formatEnglish(rank.percent)} |`;
-    }).join('\n');
+      : intent.order === 'asc'
+        ? 'have the lowest price'
+        : 'have the highest price';
+    const intro =
+      intent.kind === 'comparison'
+        ? `Among ${context.eligible}/${context.requested} groups with sufficient data, **${winners}** ${rankingDescription} by ${side}.\n\n`
+        : `Verified data for ${context.eligible}/${context.requested} product groups:\n\n`;
+    const rows = context.ranking
+      .slice(0, 10)
+      .map((rank) => {
+        const row = context.rows.find((item) => item.key === rank.key)!;
+        return `| ${rank.label} | ${formatEnglish(row.comparison?.today ?? null)} | ${formatEnglish(rank.change)} | ${formatEnglish(rank.percent)} |`;
+      })
+      .join('\n');
     const missing = context.missing.length
       ? `\n\nNot ranked because usable price data is unavailable: ${context.missing.map((item) => item.label).join(', ')}.`
       : '';
-    const investments = intent.kind === 'investment' && context.investments.length
-      ? '\n\n### Reference calculations\n\n' + context.investments.slice(0, 6).map((item) =>
-          `- ${item.label}: ${formatEnglish(item.quantityLuong)} lượng; estimated profit/loss on resale ${formatEnglish(item.profitLossVnd)} VND; dealer buy price to break even ${formatEnglish(item.breakEvenBuyVndPerLuong)} VND/lượng. Fees: ${formatEnglish(item.feesVnd)} VND.`,
-        ).join('\n')
-      : '';
+    const investments =
+      intent.kind === 'investment' && context.investments.length
+        ? '\n\n### Reference calculations\n\n' +
+          context.investments
+            .slice(0, 6)
+            .map(
+              (item) =>
+                `- ${item.label}: ${formatEnglish(item.quantityLuong)} lượng; estimated profit/loss on resale ${formatEnglish(item.profitLossVnd)} VND; dealer buy price to break even ${formatEnglish(item.breakEvenBuyVndPerLuong)} VND/lượng. Fees: ${formatEnglish(item.feesVnd)} VND.`,
+            )
+            .join('\n')
+        : '';
     return `${forecast ? '' : intro}${forecastText}\n\nUnit: VND million per lượng. Date: ${context.today}${intent.daily ? ` compared with ${context.yesterday}; the latest quote is compared with the previous dated record, not the same time of day` : ''}.\n\n| Product group | Current price | Change | % |\n| --- | ---: | ---: | ---: |\n${rows}${missing}\n\nDealer buy is what the dealer pays you. Calculate the buy–sell spread before trading.${portfolioText}${investments}`;
   }
   const format = (n: number | null) =>
     n === null ? '—' : n.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
-    const portfolio = context.portfolioSummary;
+  const portfolio = context.portfolioSummary;
   const forecastText = forecast
     ? forecast.status === 'experimental'
       ? `\n\n### Dự báo 7 ngày — ngày đích ${forecast.targetDate}\n\n- Phương pháp: phân vị thay đổi lịch sử cách 7 ngày từ ${forecast.observationCount} ngày và ${forecast.pairCount} cặp.\n- Kịch bản giảm: mua vào ${format(forecast.ranges[0]?.buyVndPerLuong ?? null)} VNĐ/lượng; bán ra ${format(forecast.ranges[0]?.sellVndPerLuong ?? null)} VNĐ/lượng.\n- Kịch bản cơ sở: mua vào ${format(forecast.ranges[1]?.buyVndPerLuong ?? null)} VNĐ/lượng; bán ra ${format(forecast.ranges[1]?.sellVndPerLuong ?? null)} VNĐ/lượng.\n- Kịch bản tăng: mua vào ${format(forecast.ranges[2]?.buyVndPerLuong ?? null)} VNĐ/lượng; bán ra ${format(forecast.ranges[2]?.sellVndPerLuong ?? null)} VNĐ/lượng.\n- Đây là khoảng ước tính thực nghiệm, không phải xác suất hoặc giá mục tiêu bảo đảm.`
@@ -506,7 +522,9 @@ export function factualAnswer(
   return (
     (intent.kind === 'comparison'
       ? `Trong ${context.eligible}/${context.requested} nhóm đủ dữ liệu, **${winners}** ${intent.daily ? 'có biến động lớn nhất' : intent.order === 'asc' ? 'có giá thấp nhất' : 'có giá cao nhất'} về giá ${side}.\n\n`
-      : forecast ? '' : `Dữ liệu kiểm chứng được cho ${context.eligible}/${context.requested} nhóm sản phẩm:\n\n`) +
+      : forecast
+        ? ''
+        : `Dữ liệu kiểm chứng được cho ${context.eligible}/${context.requested} nhóm sản phẩm:\n\n`) +
     `${forecastText}\n\nĐơn vị: triệu đồng/lượng. Ngày ${context.today}${intent.daily ? ` so với ${context.yesterday}; giá mới nhất so với bản ghi ngày trước, không phải cùng giờ` : ''}.\n\n` +
     '| Nhóm sản phẩm | Giá hiện tại | Thay đổi | % |\n| --- | ---: | ---: | ---: |\n' +
     context.ranking

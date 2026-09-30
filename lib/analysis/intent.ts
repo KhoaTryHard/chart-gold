@@ -1,4 +1,9 @@
-import { MARKET_COMPANIES, getMarketProducts } from '@/lib/market-sources';
+import {
+  getMarketProductCategory,
+  MARKET_COMPANIES,
+  MARKET_PRODUCTS,
+  type MarketProductCategory,
+} from '@/lib/market-sources';
 import { isForecastQuestion, resolveForecastTargetDate } from './forecast';
 
 export function normalizeQuestion(value: string) {
@@ -10,6 +15,12 @@ export function normalizeQuestion(value: string) {
     .toLowerCase();
 }
 
+function productSearchKey(value: string) {
+  return normalizeQuestion(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 export type AnalysisIntent = {
   kind: 'lookup' | 'comparison' | 'investment' | 'macro' | 'out-of-scope';
   needsResearch: boolean;
@@ -17,7 +28,7 @@ export type AnalysisIntent = {
   scope: 'selected' | 'companies' | 'market';
   companyIds: string[];
   productIds: string[];
-  category: 'ring' | 'bar' | 'jewelry' | null;
+  category: MarketProductCategory | null;
   side: 'buy' | 'sell';
   ranking: 'absolute' | 'percent';
   order: 'asc' | 'desc';
@@ -40,7 +51,11 @@ export function resolveIntent(
   let q = currentQuestion;
   // "Nếu mua..." is commonly a standalone investment scenario. Only merge
   // short, clearly referential follow-ups with the previous user turn.
-  if (/^(con |vay |the |so voi |loai do|san pham do|and |then |what about |how about |that )/.test(q)) {
+  if (
+    /^(con |vay |the |so voi |loai do|san pham do|and |then |what about |how about |that )/.test(
+      q,
+    )
+  ) {
     const prior = history.filter((message) => message.role === 'user').at(-1);
     if (prior) q = `${normalizeQuestion(prior.content)} ${q}`;
   }
@@ -59,24 +74,63 @@ export function resolveIntent(
     companyIds = companyIds.filter((id) => id !== 'baotin');
   if (/bao tin manh hai|\bbtmh\b/.test(q))
     companyIds = companyIds.filter((id) => id !== 'baotin');
-  const productIds = MARKET_COMPANIES.flatMap((company) =>
-    getMarketProducts(company.id),
-  )
-    .filter((product) =>
-      [product.id, product.label, product.shortLabel].some((label) =>
-        q.includes(normalizeQuestion(label)),
+  const matchedProducts = MARKET_PRODUCTS.flatMap((product) => {
+    const aliases = [
+      product.id,
+      product.label,
+      product.shortLabel,
+      'officialMatch' in product &&
+      product.officialMatch &&
+      product.officialMatch.trim().includes(' ')
+        ? product.officialMatch
+        : null,
+      ...('searchAliases' in product ? (product.searchAliases ?? []) : []),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .map(productSearchKey)
+      .filter((alias) => alias.length >= 2)
+      .sort((left, right) => right.length - left.length);
+    const normalizedQuery = ` ${productSearchKey(q)} `;
+    const alias = aliases.find((candidate) =>
+      normalizedQuery.includes(` ${candidate} `),
+    );
+    return alias ? [{ product, alias }] : [];
+  });
+  const specificProducts = matchedProducts.filter(
+    ({ product, alias }) =>
+      !matchedProducts.some(
+        (candidate) =>
+          candidate.product.id !== product.id &&
+          candidate.product.companyId === product.companyId &&
+          candidate.alias.length > alias.length &&
+          candidate.alias.startsWith(`${alias} `),
       ),
-    )
-    .map((product) => product.id);
-  // "nguyên nhân" is a causal question, not a request for gold rings.
+  );
+  const productIds = specificProducts.map(({ product }) => product.id);
+  const productCategories = new Set(
+    specificProducts.map(({ product }) => getMarketProductCategory(product)),
+  );
   const categoryText = q.replace(/nguyen nhan/g, '');
-  const category = /\bnhan\b|\bring\b/.test(categoryText)
-    ? 'ring'
-    : /mieng|\bbar\b/.test(q)
-      ? 'bar'
-      : /nu trang|trang suc|jewell?ry/.test(q)
-        ? 'jewelry'
-        : null;
+  const category =
+    productCategories.size === 1
+      ? [...productCategories][0]!
+      : /\bnhan\b|\bring\b/.test(categoryText)
+        ? 'ring'
+        : /mieng|\bbar\b/.test(q)
+          ? 'bar'
+          : /dong vang|\bcoin\b/.test(q)
+            ? 'coin'
+            : /qua tang|\bgift\b/.test(q)
+              ? 'gift'
+              : /nguyen lieu|raw material/.test(q)
+                ? 'raw-material'
+                : /(?:vang|gold).*tich luy|tich luy.*(?:vang|gold)|accumulation|kim gia bao|tieu kim cat/.test(
+                      q,
+                    )
+                  ? 'investment-gold'
+                  : /nu trang|trang suc|jewell?ry/.test(q)
+                    ? 'jewelry'
+                    : null;
   const comparison =
     /so sanh|doi chieu|loai nao|dau la loai|lon nhat|manh nhat|cao nhat|thap nhat|xep hang|top\s*\d|thuong hieu nao|bien dong nhat|re nhat|dat nhat|\bcompare\b|\bversus\b|\bvs\b|which (?:one|brand|product)|highest|lowest|cheapest|most expensive|rank(?:ing)?|best price/.test(
       q,
@@ -92,10 +146,13 @@ export function resolveIntent(
   const marketComparison =
     comparison &&
     (!investment ||
-      /loai|gia|thuong hieu|san pham|hom qua|pnj|sjc|doji|product|price|brand|yesterday/.test(q));
+      /loai|gia|thuong hieu|san pham|hom qua|pnj|sjc|doji|product|price|brand|yesterday/.test(
+        q,
+      ));
   const out =
-    /viet code|lap trinh|cong thuc nau|bong da|thoi tiet|lam banh|\bcod(?:e|ing)\b|programming|football|weather|recipe|cooking/.test(q) &&
-    !/vang|dau tu|gold|invest/.test(q);
+    /viet code|lap trinh|cong thuc nau|bong da|thoi tiet|lam banh|\bcod(?:e|ing)\b|programming|football|weather|recipe|cooking/.test(
+      q,
+    ) && !/vang|dau tu|gold|invest/.test(q);
   const deep =
     /phan tich sau|chi tiet|kich ban|phan bo|danh muc|dai han|6.thang|12.thang|deep analysis|detailed|scenario|allocation|long term|6.month|12.month/.test(
       q,
@@ -116,7 +173,9 @@ export function resolveIntent(
       productIds.length || companyIds.length
         ? 'companies'
         : marketComparison ||
-            /toan thi truong|cac thuong hieu|cac loai vang|whole market|all brands?|all gold products?|gia vang hom nay|gold price|\bmarket\b/.test(q)
+            /toan thi truong|cac thuong hieu|cac loai vang|whole market|all brands?|all gold products?|gia vang hom nay|gold price|\bmarket\b/.test(
+              q,
+            )
           ? 'market'
           : category
             ? 'companies'
@@ -125,36 +184,50 @@ export function resolveIntent(
     productIds,
     category,
     side:
-      /ban ra|gia ban|sell price|dealer sell/.test(currentQuestion) && !/mua vao|buy price|dealer buy/.test(currentQuestion)
+      /ban ra|gia ban|sell price|dealer sell/.test(currentQuestion) &&
+      !/mua vao|buy price|dealer buy/.test(currentQuestion)
         ? 'sell'
         : /mua vao|buy price|dealer buy/.test(currentQuestion)
           ? 'buy'
-          : /ban ra|gia ban|sell price|dealer sell/.test(q) && !/mua vao|buy price|dealer buy/.test(q)
+          : /ban ra|gia ban|sell price|dealer sell/.test(q) &&
+              !/mua vao|buy price|dealer buy/.test(q)
             ? 'sell'
             : 'buy',
-    ranking: /phan tram|ty le|%|percent(?:age)?|rate/.test(q) ? 'percent' : 'absolute',
-    order: /thap nhat|re nhat|nho nhat|lowest|cheapest|smallest/.test(q) ? 'asc' : 'desc',
-    daily: /hom qua|bien dong|thay doi|tang|giam|yesterday|movement|change|increas|decreas/.test(q),
-    horizon: /6.thang|12.thang|dai han|nam toi|6.month|12.month|long term|next year/.test(q)
-      ? '6-12m'
-      : /tuan|ngan han|week|short term/.test(q)
-        ? '1-4w'
-        : '1-3m',
+    ranking: /phan tram|ty le|%|percent(?:age)?|rate/.test(q)
+      ? 'percent'
+      : 'absolute',
+    order: /thap nhat|re nhat|nho nhat|lowest|cheapest|smallest/.test(q)
+      ? 'asc'
+      : 'desc',
+    daily:
+      /hom qua|bien dong|thay doi|tang|giam|yesterday|movement|change|increas|decreas/.test(
+        q,
+      ),
+    horizon:
+      /6.thang|12.thang|dai han|nam toi|6.month|12.month|long term|next year/.test(
+        q,
+      )
+        ? '6-12m'
+        : /tuan|ngan han|week|short term/.test(q)
+          ? '1-4w'
+          : '1-3m',
     ambiguous:
       !out &&
       !research &&
       !comparison &&
       !investment &&
-      !/vang|gia|spread|ma7|ma30|drawdown|mua|ban|chi|luong|gold|price|buy|sell|ounce|gram|luong/.test(q),
+      !/vang|gia|spread|ma7|ma30|drawdown|mua|ban|chi|luong|gold|price|buy|sell|ounce|gram|luong/.test(
+        q,
+      ),
     range: forecast
       ? '1N'
       : /7 ngay|tuan qua|7 days?|last week/.test(q)
-      ? '7N'
-      : /30 ngay|thang qua|30 days?|last month/.test(q)
-        ? '1T'
-        : /365 ngay|nam qua|365 days?|last year/.test(q)
-          ? '1N'
-          : undefined,
+        ? '7N'
+        : /30 ngay|thang qua|30 days?|last month/.test(q)
+          ? '1T'
+          : /365 ngay|nam qua|365 days?|last year/.test(q)
+            ? '1N'
+            : undefined,
     forecast,
     targetDate,
   };

@@ -8,6 +8,7 @@ import {
   presentMarketProduct,
   type MarketCompanyId,
   type MarketProduct,
+  type MarketProductCategory,
 } from '@/lib/market-sources';
 import type { Locale } from '@/lib/i18n';
 
@@ -16,14 +17,7 @@ import type { Locale } from '@/lib/i18n';
  * contains product identity and presentation metadata only; quotes always
  * come from getMarketData at request time.
  */
-export type ComparisonProductCategory =
-  | 'bar'
-  | 'ring'
-  | 'gift'
-  | 'jewelry'
-  | 'coin'
-  | 'raw-material'
-  | 'other';
+export type ComparisonProductCategory = MarketProductCategory;
 
 export type ComparisonUnit = 'luong' | 'chi' | 'phan' | 'gram';
 
@@ -63,10 +57,7 @@ export type ComparisonCatalogProduct = {
   dedupeKey: string;
 };
 
-export type ComparisonSetId =
-  | 'sjc-bar'
-  | 'ring-9999'
-  | 'ring-9999-vs-sjc';
+export type ComparisonSetId = 'sjc-bar' | 'ring-9999' | 'ring-9999-vs-sjc';
 
 export type ComparisonSet = {
   id: ComparisonSetId;
@@ -125,10 +116,15 @@ function sourceIdentityLabel(identity: string) {
   return getMarketCompany(identity).shortName;
 }
 
-function toCatalogProduct(definition: CatalogDefinition): ComparisonCatalogProduct {
+function toCatalogProduct(
+  definition: CatalogDefinition,
+): ComparisonCatalogProduct {
   const product = getMarketProduct(definition.companyId, definition.productId);
   const company = getMarketCompany(definition.companyId);
-  const identity = sourceIdentity(definition.companyId, definition.sourceIdentity);
+  const identity = sourceIdentity(
+    definition.companyId,
+    definition.sourceIdentity,
+  );
   const eligible = isMarketProductSelectable(product);
   const eligibilityReason =
     !eligible && 'unavailableReason' in product
@@ -260,44 +256,46 @@ function buildProducts(definitions: readonly CatalogDefinition[]) {
 const SJC_BAR_PRODUCTS = buildProducts(SJC_BAR_DEFINITIONS);
 const RING_9999_PRODUCTS = buildProducts(RING_9999_DEFINITIONS);
 
-export const COMPARISON_SETS: Readonly<Record<ComparisonSetId, ComparisonSet>> = {
-  'sjc-bar': {
-    id: 'sjc-bar',
-    label: 'Vàng miếng SJC',
-    description:
-      'So sánh giá vàng miếng SJC tương đương giữa các nguồn đang có báo giá.',
-    mode: 'same-group',
-    rankingEnabled: true,
-    comparableGroup: COMPARABLE_GROUPS.sjcBar,
-    products: SJC_BAR_PRODUCTS,
-    maxProducts: 3,
-  },
-  'ring-9999': {
-    id: 'ring-9999',
-    label: 'Vàng nhẫn 9999',
-    description:
-      'So sánh giá nhẫn trơn 9999 giữa các nguồn đang có báo giá.',
-    mode: 'same-group',
-    rankingEnabled: true,
-    comparableGroup: COMPARABLE_GROUPS.ring9999,
-    products: RING_9999_PRODUCTS,
-    maxProducts: 3,
-  },
-  'ring-9999-vs-sjc': {
-    id: 'ring-9999-vs-sjc',
-    label: 'Nhẫn 9999 và vàng miếng SJC',
-    description:
-      'Đối chiếu nhẫn trơn 9999 với vàng miếng SJC; các nhóm được trình bày cạnh nhau và không xếp hạng như một sản phẩm đồng nhất.',
-    mode: 'cross-group',
-    rankingEnabled: false,
-    comparableGroup: null,
-    products: [...RING_9999_PRODUCTS, ...SJC_BAR_PRODUCTS],
-    maxProducts: 3,
-  },
-};
+export const COMPARISON_SETS: Readonly<Record<ComparisonSetId, ComparisonSet>> =
+  {
+    'sjc-bar': {
+      id: 'sjc-bar',
+      label: 'Vàng miếng SJC',
+      description:
+        'So sánh giá vàng miếng SJC tương đương giữa các nguồn đang có báo giá.',
+      mode: 'same-group',
+      rankingEnabled: true,
+      comparableGroup: COMPARABLE_GROUPS.sjcBar,
+      products: SJC_BAR_PRODUCTS,
+      maxProducts: 3,
+    },
+    'ring-9999': {
+      id: 'ring-9999',
+      label: 'Vàng nhẫn 9999',
+      description: 'So sánh giá nhẫn trơn 9999 giữa các nguồn đang có báo giá.',
+      mode: 'same-group',
+      rankingEnabled: true,
+      comparableGroup: COMPARABLE_GROUPS.ring9999,
+      products: RING_9999_PRODUCTS,
+      maxProducts: 3,
+    },
+    'ring-9999-vs-sjc': {
+      id: 'ring-9999-vs-sjc',
+      label: 'Nhẫn 9999 và vàng miếng SJC',
+      description:
+        'Đối chiếu nhẫn trơn 9999 với vàng miếng SJC; các nhóm được trình bày cạnh nhau và không xếp hạng như một sản phẩm đồng nhất.',
+      mode: 'cross-group',
+      rankingEnabled: false,
+      comparableGroup: null,
+      products: [...RING_9999_PRODUCTS, ...SJC_BAR_PRODUCTS],
+      maxProducts: 3,
+    },
+  };
 
 /** Backward-compatible aliases accepted in query strings and old links. */
-export function resolveComparisonSetId(value: string | null | undefined): ComparisonSetId {
+export function resolveComparisonSetId(
+  value: string | null | undefined,
+): ComparisonSetId {
   if (value === 'ring-9999-vs-sjc' || value === 'ring-9999-vs-sjc-bar')
     return 'ring-9999-vs-sjc';
   if (value === 'ring-9999') return 'ring-9999';
@@ -356,17 +354,18 @@ export function dedupeComparisonCatalogProducts(
     group.push(product);
     groups.set(product.dedupeKey, group);
   }
-  return [...groups.values()].map((group) =>
-    [...group].sort((left, right) => {
-      const availability =
-        Number(right.eligibility === 'eligible') -
-        Number(left.eligibility === 'eligible');
-      if (availability) return availability;
-      const source =
-        Number(right.sourceKind === 'official') -
-        Number(left.sourceKind === 'official');
-      return source || left.id.localeCompare(right.id);
-    })[0],
+  return [...groups.values()].map(
+    (group) =>
+      [...group].sort((left, right) => {
+        const availability =
+          Number(right.eligibility === 'eligible') -
+          Number(left.eligibility === 'eligible');
+        if (availability) return availability;
+        const source =
+          Number(right.sourceKind === 'official') -
+          Number(left.sourceKind === 'official');
+        return source || left.id.localeCompare(right.id);
+      })[0],
   );
 }
 
@@ -401,7 +400,7 @@ export function presentComparisonCatalogProduct(
     sourceIdentityLabel:
       product.sourceIdentity === 'btmc'
         ? 'Bảo Tín / BTMC'
-        : identityCompany?.shortName ?? product.sourceIdentityLabel,
+        : (identityCompany?.shortName ?? product.sourceIdentityLabel),
     eligibilityReason: product.eligibilityReason
       ? presentMarketCatalogText(product.eligibilityReason, locale)
       : null,
@@ -414,7 +413,10 @@ export function presentComparisonSet(
   locale: Locale,
 ): ComparisonSet {
   if (locale === 'vi') return set;
-  const englishCopy: Record<ComparisonSetId, { label: string; description: string }> = {
+  const englishCopy: Record<
+    ComparisonSetId,
+    { label: string; description: string }
+  > = {
     'sjc-bar': {
       label: 'SJC gold bars',
       description:

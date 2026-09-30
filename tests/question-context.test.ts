@@ -5,7 +5,8 @@ import { analysisRequestSchema } from '@/lib/analysis/request';
 describe('question analysis context', () => {
   it('normalizes Vietnamese quantity, product, horizon, and range from the question', () => {
     const context = inferQuestionContext({
-      question: 'Tôi muốn mua 0,1 lượng nhẫn SJC, dự định giữ 6 tháng, xem 7 ngày qua',
+      question:
+        'Tôi muốn mua 0,1 lượng nhẫn SJC, dự định giữ 6 tháng, xem 7 ngày qua',
       goal: 'buy',
       companyId: 'sjc',
       productId: 'bar-1l',
@@ -14,7 +15,10 @@ describe('question analysis context', () => {
     });
     expect(context.productId).toBe('ring-1c');
     expect(context.range).toBe('7N');
-    expect(context.scenarioInputs).toMatchObject({ quantityLuong: 0.1, horizon: '6-12m' });
+    expect(context.scenarioInputs).toMatchObject({
+      quantityLuong: 0.1,
+      horizon: '6-12m',
+    });
     expect(context.missing).toEqual([]);
   });
 
@@ -28,6 +32,22 @@ describe('question analysis context', () => {
     });
     expect(context.missing.map((item) => item.key)).toContain('product');
     expect(context.missing.map((item) => item.key)).toContain('quantityLuong');
+  });
+
+  it('routes a first-party BTMH product code to BTMH even when the form defaults to SJC', () => {
+    const context = inferQuestionContext({
+      question: 'Giá KGB hôm nay?',
+      goal: 'market',
+      companyId: 'sjc',
+      productId: 'bar-1l',
+      locale: 'vi',
+    });
+    expect(context).toMatchObject({
+      companyId: 'btmh',
+      productId: 'btmh-kgb',
+      companyLabel: 'BTMH',
+      productLabel: 'Kim Gia Bảo 24K',
+    });
   });
 
   it('accepts question mode without client form fields', () => {

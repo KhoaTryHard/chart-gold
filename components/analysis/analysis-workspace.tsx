@@ -24,9 +24,11 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import {
+  getDefaultMarketProduct,
   getMarketProducts,
   isMarketCompanyId,
   isMarketProductId,
+  isMarketProductSelectable,
   type MarketCompanyId,
 } from '@/lib/market-sources';
 import { ANALYSIS_RANGES, type AnalysisRange } from '@/lib/analysis/metrics';
@@ -140,10 +142,16 @@ function ForecastCard({
   const english = locale === 'en';
   const labels = english
     ? { downside: 'Downside', base: 'Base', upside: 'Upside' }
-    : { downside: 'Kịch bản giảm', base: 'Kịch bản cơ sở', upside: 'Kịch bản tăng' };
+    : {
+        downside: 'Kịch bản giảm',
+        base: 'Kịch bản cơ sở',
+        upside: 'Kịch bản tăng',
+      };
   const formatPrice = (value: number | null) =>
     value === null
-      ? (english ? 'Unavailable' : 'Chưa có')
+      ? english
+        ? 'Unavailable'
+        : 'Chưa có'
       : `${new Intl.NumberFormat(english ? 'en-US' : 'vi-VN').format(value)} ${english ? 'VND/lượng' : 'VNĐ/lượng'}`;
   return (
     <section
@@ -157,13 +165,19 @@ function ForecastCard({
             {english ? 'Forecast estimate' : 'Ước tính dự báo'}
           </p>
           <h2 id="forecast-result-title" className="mt-2 text-xl font-semibold">
-            {english ? `Target date: ${forecast.targetDate}` : `Ngày đích: ${forecast.targetDate}`}
+            {english
+              ? `Target date: ${forecast.targetDate}`
+              : `Ngày đích: ${forecast.targetDate}`}
           </h2>
         </div>
         <span className="rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-foreground">
           {forecast.status === 'experimental'
-            ? (english ? 'Experimental range' : 'Khoảng thực nghiệm')
-            : (english ? 'Insufficient data' : 'Chưa đủ dữ liệu')}
+            ? english
+              ? 'Experimental range'
+              : 'Khoảng thực nghiệm'
+            : english
+              ? 'Insufficient data'
+              : 'Chưa đủ dữ liệu'}
         </span>
       </div>
       {forecast.status === 'experimental' ? (
@@ -175,19 +189,33 @@ function ForecastCard({
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {forecast.ranges.map((range) => (
-              <div key={range.label} className="rounded-xl border border-border bg-muted/40 p-3">
+              <div
+                key={range.label}
+                className="rounded-xl border border-border bg-muted/40 p-3"
+              >
                 <p className="text-sm font-semibold">{labels[range.label]}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{english ? 'Dealer buy' : 'Mua vào'}</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums">{formatPrice(range.buyVndPerLuong)}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{english ? 'Dealer sell' : 'Bán ra'}</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums">{formatPrice(range.sellVndPerLuong)}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {english ? 'Dealer buy' : 'Mua vào'}
+                </p>
+                <p className="mt-1 text-sm font-semibold tabular-nums">
+                  {formatPrice(range.buyVndPerLuong)}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {english ? 'Dealer sell' : 'Bán ra'}
+                </p>
+                <p className="mt-1 text-sm font-semibold tabular-nums">
+                  {formatPrice(range.sellVndPerLuong)}
+                </p>
               </div>
             ))}
           </div>
         </>
       ) : (
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          {forecast.reason ?? (english ? 'A numeric range is unavailable.' : 'Chưa thể tạo khoảng giá định lượng.')}
+          {forecast.reason ??
+            (english
+              ? 'A numeric range is unavailable.'
+              : 'Chưa thể tạo khoảng giá định lượng.')}
         </p>
       )}
       <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
@@ -216,32 +244,48 @@ function analysisGoals(locale: 'vi' | 'en'): Array<{
 }> {
   return locale === 'en'
     ? [
-        { value: 'market', label: 'Understand the market', description: 'News, drivers, and context' },
-        { value: 'buy', label: 'I plan to buy', description: 'Cost, break-even, buy or wait' },
-        { value: 'hold', label: 'I hold gold', description: 'Profit or loss if sold today' },
-        { value: 'compare', label: 'Compare gold', description: 'Prices you pay and prices you receive' },
+        {
+          value: 'market',
+          label: 'Understand the market',
+          description: 'News, drivers, and context',
+        },
+        {
+          value: 'buy',
+          label: 'I plan to buy',
+          description: 'Cost, break-even, buy or wait',
+        },
+        {
+          value: 'hold',
+          label: 'I hold gold',
+          description: 'Profit or loss if sold today',
+        },
+        {
+          value: 'compare',
+          label: 'Compare gold',
+          description: 'Prices you pay and prices you receive',
+        },
       ]
     : [
-  {
-    value: 'market',
-    label: 'Hiểu thị trường',
-    description: 'Tin, nguyên nhân, bối cảnh',
-  },
-  {
-    value: 'buy',
-    label: 'Tôi định mua',
-    description: 'Chi phí, hòa vốn, mua hay chờ',
-  },
-  {
-    value: 'hold',
-    label: 'Tôi đang giữ vàng',
-    description: 'Lãi/lỗ nếu bán hôm nay',
-  },
-  {
-    value: 'compare',
-    label: 'So sánh loại vàng',
-    description: 'Giá bạn phải trả và khoản có thể nhận',
-  },
+        {
+          value: 'market',
+          label: 'Hiểu thị trường',
+          description: 'Tin, nguyên nhân, bối cảnh',
+        },
+        {
+          value: 'buy',
+          label: 'Tôi định mua',
+          description: 'Chi phí, hòa vốn, mua hay chờ',
+        },
+        {
+          value: 'hold',
+          label: 'Tôi đang giữ vàng',
+          description: 'Lãi/lỗ nếu bán hôm nay',
+        },
+        {
+          value: 'compare',
+          label: 'So sánh loại vàng',
+          description: 'Giá bạn phải trả và khoản có thể nhận',
+        },
       ];
 }
 
@@ -266,32 +310,51 @@ function formatValue(
 function localizedAnalysisMessage(message: string, locale: 'vi' | 'en') {
   if (locale === 'vi') return message;
   const translations: Record<string, string> = {
-    'Không kiểm tra được phiên đăng nhập. Bấm Kiểm tra lại.': 'Unable to check your sign-in session. Select Check again.',
-    'Chưa thể kiểm tra quyền AI lúc này. Bấm Kiểm tra lại; chưa có lượt AI nào được sử dụng.': 'AI access could not be checked right now. Select Check again; no AI request has been used.',
-    'Tài khoản Google này đang liên kết với tài khoản khác. Hãy đăng xuất và chọn đúng tài khoản Google.': 'This Google account is linked to a different account. Sign out and choose the correct Google account.',
-    'Phiên tài khoản đang được đồng bộ lại.': 'Your account session is syncing.',
+    'Không kiểm tra được phiên đăng nhập. Bấm Kiểm tra lại.':
+      'Unable to check your sign-in session. Select Check again.',
+    'Chưa thể kiểm tra quyền AI lúc này. Bấm Kiểm tra lại; chưa có lượt AI nào được sử dụng.':
+      'AI access could not be checked right now. Select Check again; no AI request has been used.',
+    'Tài khoản Google này đang liên kết với tài khoản khác. Hãy đăng xuất và chọn đúng tài khoản Google.':
+      'This Google account is linked to a different account. Sign out and choose the correct Google account.',
+    'Phiên tài khoản đang được đồng bộ lại.':
+      'Your account session is syncing.',
     'Không kiểm tra được quyền AI.': 'Unable to check AI access.',
-    'Kiểm tra số lượng lớn hơn 0, giá vốn và đơn vị ghi bên cạnh ô nhập.': 'Check that quantity is greater than zero and review the cost basis and units shown beside each field.',
-    'Không thể kiểm tra thông tin lượt này.': 'Unable to check this analysis request.',
-    'Không thể bắt đầu đăng nhập Google. Vui lòng thử lại.': 'Unable to start Google sign-in. Please try again.',
-    'Máy chủ không nhận được phiên đăng nhập. Bấm Kiểm tra lại; nếu vẫn lỗi, đăng nhập lại bằng nút bên dưới.': 'The server did not receive your sign-in session. Select Check again; if the issue remains, sign in again below.',
-    'Đăng nhập bằng nút bên dưới để gửi câu hỏi. Bản nháp sẽ được giữ lại.': 'Sign in below to send your question. Your draft will be kept.',
+    'Kiểm tra số lượng lớn hơn 0, giá vốn và đơn vị ghi bên cạnh ô nhập.':
+      'Check that quantity is greater than zero and review the cost basis and units shown beside each field.',
+    'Không thể kiểm tra thông tin lượt này.':
+      'Unable to check this analysis request.',
+    'Không thể bắt đầu đăng nhập Google. Vui lòng thử lại.':
+      'Unable to start Google sign-in. Please try again.',
+    'Máy chủ không nhận được phiên đăng nhập. Bấm Kiểm tra lại; nếu vẫn lỗi, đăng nhập lại bằng nút bên dưới.':
+      'The server did not receive your sign-in session. Select Check again; if the issue remains, sign in again below.',
+    'Đăng nhập bằng nút bên dưới để gửi câu hỏi. Bản nháp sẽ được giữ lại.':
+      'Sign in below to send your question. Your draft will be kept.',
     'Tài khoản chưa có quyền dùng AI.': 'This account does not have AI access.',
     'Bổ sung thông tin cho lượt này.': 'Add information for this analysis.',
-    'Đã dừng phân tích. Bạn có thể gửi lại.': 'Analysis stopped. You can send it again.',
+    'Đã dừng phân tích. Bạn có thể gửi lại.':
+      'Analysis stopped. You can send it again.',
     'Không thể hoàn tất phân tích.': 'Unable to complete the analysis.',
     'Không thể bắt đầu phân tích.': 'Unable to start the analysis.',
-    'Máy chủ không trả về luồng dữ liệu.': 'The server did not return a data stream.',
+    'Máy chủ không trả về luồng dữ liệu.':
+      'The server did not return a data stream.',
   };
-  return translations[message] ?? (/[\u00c0-\u024f]/.test(message)
-    ? 'The request could not be completed. Please try again.'
-    : message);
+  return (
+    translations[message] ??
+    (/[\u00c0-\u024f]/.test(message)
+      ? 'The request could not be completed. Please try again.'
+      : message)
+  );
 }
 
 export function AnalysisWorkspace() {
   const { data: session } = useSession();
   const { locale } = useLocale();
-  return <AccountAnalysisWorkspace key={session?.user?.email ?? 'guest'} locale={locale} />;
+  return (
+    <AccountAnalysisWorkspace
+      key={session?.user?.email ?? 'guest'}
+      locale={locale}
+    />
+  );
 }
 
 function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
@@ -310,24 +373,33 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   const [productId, setProductId] = useState('bar-1l');
   const [range, setRange] = useState<AnalysisRange>('1T');
   const product = products.find((item) => item.id === productId) ?? products[0];
-  const [question, setQuestion] = useState(() => defaultAnalysisQuestion(locale, goal));
+  const [question, setQuestion] = useState(() =>
+    defaultAnalysisQuestion(locale, goal),
+  );
   const questionEditedRef = useRef(false);
   const [savedLedger, setSavedLedger] = useState<PortfolioLedger | undefined>();
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState('');
   const [ledgerVersion, setLedgerVersion] = useState<number | null>(null);
   const holdSummary = useMemo(
-    () => savedLedger ? calculateLedgerSummary(savedLedger.transactions, new Map()) : null,
+    () =>
+      savedLedger
+        ? calculateLedgerSummary(savedLedger.transactions, new Map())
+        : null,
     [savedLedger],
   );
   const holdProducts = useMemo(
-    () => savedLedger ? ledgerProductKeys(savedLedger) : [],
+    () => (savedLedger ? ledgerProductKeys(savedLedger) : []),
     [savedLedger],
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversationVersion, setConversationVersion] = useState<number | null>(null);
-  const [conversationTurns, setConversationTurns] = useState<ConversationTurn[]>([]);
+  const [conversationVersion, setConversationVersion] = useState<number | null>(
+    null,
+  );
+  const [conversationTurns, setConversationTurns] = useState<
+    ConversationTurn[]
+  >([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -338,7 +410,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     range: AnalysisRange;
     rangeSource: 'question' | 'link' | 'default';
   } | null>(null);
-  const [missingQuestionNeeds, setMissingQuestionNeeds] = useState<Array<{ label: string; reason: string }>>([]);
+  const [missingQuestionNeeds, setMissingQuestionNeeds] = useState<
+    Array<{ label: string; reason: string }>
+  >([]);
   const [answer, setAnswer] = useState('');
   const [answerLocale, setAnswerLocale] = useState<'vi' | 'en'>(locale);
   const [facts, setFacts] = useState<AnalysisFacts | null>(null);
@@ -367,25 +441,49 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     login: () => void;
     refresh: () => void;
     signOut: () => void;
-  }>({ login: () => undefined, refresh: () => undefined, signOut: () => undefined });
+  }>({
+    login: () => undefined,
+    refresh: () => undefined,
+    signOut: () => undefined,
+  });
 
   const hydrateConversation = (detail: ConversationDetail) => {
     setConversationId(detail.id);
     setConversationVersion(detail.version);
     setConversationTurns(detail.turns);
     const nextMessages: ChatMessage[] = detail.turns.flatMap((item) => [
-      { role: 'user' as const, content: item.question, locale: inputLocale(item.locale, locale) },
+      {
+        role: 'user' as const,
+        content: item.question,
+        locale: inputLocale(item.locale, locale),
+      },
       ...(item.answer && item.status === 'completed'
-        ? [{ role: 'assistant' as const, content: item.answer, locale: inputLocale(item.locale, locale) }]
+        ? [
+            {
+              role: 'assistant' as const,
+              content: item.answer,
+              locale: inputLocale(item.locale, locale),
+            },
+          ]
         : []),
     ]);
     setMessages(nextMessages);
-    const last = [...detail.turns].reverse().find((item) => item.status === 'completed' && item.answer);
+    const last = [...detail.turns]
+      .reverse()
+      .find((item) => item.status === 'completed' && item.answer);
     if (last) {
       setAnswer(last.answer ?? '');
       setAnswerLocale(inputLocale(last.locale, locale));
-      setFacts(last.facts ? analysisFactsSchema.safeParse(last.facts).data ?? null : null);
-      setDecision(last.decision ? analysisDecisionSchema.safeParse(last.decision).data ?? null : null);
+      setFacts(
+        last.facts
+          ? (analysisFactsSchema.safeParse(last.facts).data ?? null)
+          : null,
+      );
+      setDecision(
+        last.decision
+          ? (analysisDecisionSchema.safeParse(last.decision).data ?? null)
+          : null,
+      );
       setForecast(last.forecast);
       setSources(last.sources ?? []);
       setCitations(last.citations ?? []);
@@ -395,7 +493,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       setProductId(last.productId);
       if (last.range in ANALYSIS_RANGES) setRange(last.range as AnalysisRange);
       if (last.goal) setGoal(last.goal);
-      if (last.analysisDepth === 'deep' || last.analysisDepth === 'standard') setDepth(last.analysisDepth);
+      if (last.analysisDepth === 'deep' || last.analysisDepth === 'standard')
+        setDepth(last.analysisDepth);
     } else {
       setAnswer('');
       setFacts(null);
@@ -411,15 +510,31 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   };
 
   const loadConversation = async (id: string, signal?: AbortSignal) => {
-    const response = await fetch(`/api/analysis/conversations/${encodeURIComponent(id)}`, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      signal,
-    });
-    const body = (await response.json().catch(() => ({}))) as { conversation?: ConversationDetail; error?: string };
-    if (!response.ok || !body.conversation) throw new Error(body.error ?? (english ? 'Unable to load this conversation.' : 'Không thể tải hội thoại này.'));
+    const response = await fetch(
+      `/api/analysis/conversations/${encodeURIComponent(id)}`,
+      {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal,
+      },
+    );
+    const body = (await response.json().catch(() => ({}))) as {
+      conversation?: ConversationDetail;
+      error?: string;
+    };
+    if (!response.ok || !body.conversation)
+      throw new Error(
+        body.error ??
+          (english
+            ? 'Unable to load this conversation.'
+            : 'Không thể tải hội thoại này.'),
+      );
     hydrateConversation(body.conversation);
-    window.history.pushState({}, '', `/phan-tich?conversation=${encodeURIComponent(id)}`);
+    window.history.pushState(
+      {},
+      '',
+      `/phan-tich?conversation=${encodeURIComponent(id)}`,
+    );
     setHistoryOpen(false);
   };
 
@@ -427,20 +542,55 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const response = await fetch('/api/analysis/conversations', { credentials: 'same-origin', cache: 'no-store', signal });
-      const body = (await response.json().catch(() => ({}))) as { conversations?: ConversationSummary[]; error?: string };
-      if (!response.ok) throw new Error(body.error ?? (english ? 'Unable to load history.' : 'Không thể tải lịch sử hội thoại.'));
+      const response = await fetch('/api/analysis/conversations', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal,
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        conversations?: ConversationSummary[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(
+          body.error ??
+            (english
+              ? 'Unable to load history.'
+              : 'Không thể tải lịch sử hội thoại.'),
+        );
       if (signal?.aborted) return;
       setConversations(body.conversations ?? []);
-      const requestedId = new URLSearchParams(window.location.search).get('conversation');
+      const requestedId = new URLSearchParams(window.location.search).get(
+        'conversation',
+      );
       if (requestedId) {
-        const detailResponse = await fetch(`/api/analysis/conversations/${encodeURIComponent(requestedId)}`, { credentials: 'same-origin', cache: 'no-store', signal });
-        const detailBody = (await detailResponse.json().catch(() => ({}))) as { conversation?: ConversationDetail; error?: string };
-        if (detailResponse.ok && detailBody.conversation) hydrateConversation(detailBody.conversation);
-        else if (!signal?.aborted) setHistoryError(detailBody.error ?? (english ? 'This conversation is unavailable.' : 'Hội thoại này không còn khả dụng.'));
+        const detailResponse = await fetch(
+          `/api/analysis/conversations/${encodeURIComponent(requestedId)}`,
+          { credentials: 'same-origin', cache: 'no-store', signal },
+        );
+        const detailBody = (await detailResponse.json().catch(() => ({}))) as {
+          conversation?: ConversationDetail;
+          error?: string;
+        };
+        if (detailResponse.ok && detailBody.conversation)
+          hydrateConversation(detailBody.conversation);
+        else if (!signal?.aborted)
+          setHistoryError(
+            detailBody.error ??
+              (english
+                ? 'This conversation is unavailable.'
+                : 'Hội thoại này không còn khả dụng.'),
+          );
       }
     } catch (cause) {
-      if (!signal?.aborted) setHistoryError(cause instanceof Error ? cause.message : (english ? 'Unable to load history.' : 'Không thể tải lịch sử hội thoại.'));
+      if (!signal?.aborted)
+        setHistoryError(
+          cause instanceof Error
+            ? cause.message
+            : english
+              ? 'Unable to load history.'
+              : 'Không thể tải lịch sử hội thoại.',
+        );
     } finally {
       if (!signal?.aborted) setHistoryLoading(false);
     }
@@ -458,15 +608,18 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     }
     const controller = new AbortController();
     queueMicrotask(() => {
-      if (!controller.signal.aborted) void loadConversationList(controller.signal);
+      if (!controller.signal.aborted)
+        void loadConversationList(controller.signal);
     });
     return () => controller.abort();
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session?.user?.email, locale]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const id = new URLSearchParams(window.location.search).get('conversation');
+      const id = new URLSearchParams(window.location.search).get(
+        'conversation',
+      );
       if (!id) {
         setConversationId(null);
         setConversationVersion(null);
@@ -475,11 +628,17 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         setAnswer('');
         return;
       }
-      void loadConversation(id).catch((cause) => setHistoryError(cause instanceof Error ? cause.message : 'Unable to load conversation.'));
+      void loadConversation(id).catch((cause) =>
+        setHistoryError(
+          cause instanceof Error
+            ? cause.message
+            : 'Unable to load conversation.',
+        ),
+      );
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -491,13 +650,32 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const requestedCompany = params.get('company');
-      const nextCompany = isMarketCompanyId(requestedCompany)
-        ? requestedCompany
-        : 'sjc';
+      const companyIsValid = isMarketCompanyId(requestedCompany);
+      const nextCompany = companyIsValid ? requestedCompany : 'sjc';
       const requestedProduct = params.get('product');
-      const nextProduct = isMarketProductId(nextCompany, requestedProduct)
-        ? requestedProduct!
-        : getMarketProducts(nextCompany)[0]?.id;
+      const matchingProduct = getMarketProducts(nextCompany).find(
+        (product) => product.id === requestedProduct,
+      );
+      const linkProductIsValid =
+        !requestedProduct ||
+        (isMarketProductId(nextCompany, requestedProduct) &&
+          matchingProduct !== undefined &&
+          isMarketProductSelectable(matchingProduct));
+      const nextProduct =
+        linkProductIsValid && requestedProduct
+          ? requestedProduct
+          : getDefaultMarketProduct(nextCompany)?.id;
+      setError(
+        !companyIsValid && requestedCompany
+          ? english
+            ? 'This brand link is invalid. Choose a valid brand and product.'
+            : 'Liên kết thương hiệu không hợp lệ. Hãy chọn thương hiệu và sản phẩm còn khả dụng.'
+          : !linkProductIsValid
+            ? english
+              ? 'This product is unavailable. The first available product for its brand is selected.'
+              : 'Sản phẩm trong liên kết chưa khả dụng. Đã chọn sản phẩm còn báo giá đầu tiên của thương hiệu.'
+            : '',
+      );
       const requestedRange = params.get('range');
       const nextRange: AnalysisRange =
         requestedRange && requestedRange in ANALYSIS_RANGES
@@ -522,7 +700,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [locale]);
+  }, [english, locale]);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -539,7 +717,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           } | null;
           throw new Error(
             localizedAnalysisMessage(
-              body?.error ?? 'Không kiểm tra được phiên đăng nhập. Bấm Kiểm tra lại.',
+              body?.error ??
+                'Không kiểm tra được phiên đăng nhập. Bấm Kiểm tra lại.',
               locale,
             ),
           );
@@ -558,7 +737,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         ) {
           sessionSyncRef.current = true;
           void update().catch(() => undefined);
-          setAccessError(locale === 'en' ? 'Your account session is syncing.' : 'Phiên tài khoản đang được đồng bộ lại.');
+          setAccessError(
+            locale === 'en'
+              ? 'Your account session is syncing.'
+              : 'Phiên tài khoản đang được đồng bộ lại.',
+          );
         } else if (
           result.access.authenticated &&
           status !== 'authenticated' &&
@@ -572,7 +755,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         if (!controller.signal.aborted)
           setAccessError(
             localizedAnalysisMessage(
-              cause instanceof Error ? cause.message : 'Không kiểm tra được quyền AI.',
+              cause instanceof Error
+                ? cause.message
+                : 'Không kiểm tra được quyền AI.',
               locale,
             ),
           );
@@ -591,23 +776,32 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     queueMicrotask(() => {
       setLedgerLoading(true);
       setLedgerError('');
-      void fetch('/api/portfolio/ledger', { credentials: 'same-origin', cache: 'no-store' })
-          .then(async (response) => {
-            const body = await response.json().catch(() => ({})) as { ledger?: PortfolioLedger; version?: number; error?: string };
-            if (!response.ok || !body.ledger || typeof body.version !== 'number')
-              throw new Error(body.error ?? 'Không thể tải Sổ vàng.');
-            setLedgerVersion(body.version);
-            return body.ledger;
-          })
-          .then((serverLedger) => {
-            setSavedLedger(serverLedger);
-            setLedgerLoading(false);
-          })
-          .catch((error) => {
-            setLedgerError(error instanceof Error ? error.message : 'Không thể tải Sổ vàng.');
-            setSavedLedger(undefined);
-            setLedgerLoading(false);
-          });
+      void fetch('/api/portfolio/ledger', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+        .then(async (response) => {
+          const body = (await response.json().catch(() => ({}))) as {
+            ledger?: PortfolioLedger;
+            version?: number;
+            error?: string;
+          };
+          if (!response.ok || !body.ledger || typeof body.version !== 'number')
+            throw new Error(body.error ?? 'Không thể tải Sổ vàng.');
+          setLedgerVersion(body.version);
+          return body.ledger;
+        })
+        .then((serverLedger) => {
+          setSavedLedger(serverLedger);
+          setLedgerLoading(false);
+        })
+        .catch((error) => {
+          setLedgerError(
+            error instanceof Error ? error.message : 'Không thể tải Sổ vàng.',
+          );
+          setSavedLedger(undefined);
+          setLedgerLoading(false);
+        });
       if (!window.location.search.includes('ai=resume')) return;
       try {
         const draft = JSON.parse(
@@ -640,7 +834,12 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   const buildPayload = () => {
     const usingAccountLedger = goal === 'hold';
     if (usingAccountLedger && (!savedLedger || !ledgerVersion))
-      throw new Error(ledgerError || (english ? 'Your Gold Ledger is empty.' : 'Sổ vàng của bạn chưa có giao dịch.'));
+      throw new Error(
+        ledgerError ||
+          (english
+            ? 'Your Gold Ledger is empty.'
+            : 'Sổ vàng của bạn chưa có giao dịch.'),
+      );
     if (usingAccountLedger && savedLedger) {
       const integrity = inspectLedgerIntegrity(savedLedger.transactions);
       if (!integrity.valid)
@@ -667,7 +866,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       messages: [],
       portfolioLedger: usingAccountLedger ? savedLedger : undefined,
       usePortfolioLedger: usingAccountLedger,
-      ledgerVersion: usingAccountLedger ? ledgerVersion ?? undefined : undefined,
+      ledgerVersion: usingAccountLedger
+        ? (ledgerVersion ?? undefined)
+        : undefined,
     });
     if (!result.success)
       throw new Error(
@@ -744,7 +945,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       });
     } catch {
       setSigningIn(false);
-      setError(english ? 'Unable to start Google sign-in. Please try again.' : 'Không thể bắt đầu đăng nhập Google. Vui lòng thử lại.');
+      setError(
+        english
+          ? 'Unable to start Google sign-in. Please try again.'
+          : 'Không thể bắt đầu đăng nhập Google. Vui lòng thử lại.',
+      );
     }
   };
 
@@ -756,7 +961,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     operation.current = controller;
     setBusy(true);
     setRetryAvailable(false);
-    setProgress(english ? 'Checking your session and details' : 'Đang kiểm tra phiên và thông tin');
+    setProgress(
+      english
+        ? 'Checking your session and details'
+        : 'Đang kiểm tra phiên và thông tin',
+    );
     setError('');
     setShowAccessHint(true);
     setWarning('');
@@ -770,7 +979,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     try {
       if (goal === 'hold') {
         if (ledgerLoading) {
-          setError(english ? 'Your Gold Ledger is still loading.' : 'Sổ vàng đang được tải.');
+          setError(
+            english
+              ? 'Your Gold Ledger is still loading.'
+              : 'Sổ vàng đang được tải.',
+          );
           return;
         }
         if (ledgerError) {
@@ -778,7 +991,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           return;
         }
         if (!savedLedger?.transactions.length) {
-          setError(english ? 'Your Gold Ledger is empty. Open Gold Ledger to add a transaction.' : 'Sổ vàng của bạn chưa có giao dịch. Hãy mở Sổ vàng để thêm giao dịch.');
+          setError(
+            english
+              ? 'Your Gold Ledger is empty. Open Gold Ledger to add a transaction.'
+              : 'Sổ vàng của bạn chưa có giao dịch. Hãy mở Sổ vàng để thêm giao dịch.',
+          );
           return;
         }
       }
@@ -801,12 +1018,19 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       }
       if (!prepared.access?.canAnalyze) {
         setError(
-          prepared.access?.message ?? (english ? 'This account does not have AI access.' : 'Tài khoản chưa có quyền dùng AI.'),
+          prepared.access?.message ??
+            (english
+              ? 'This account does not have AI access.'
+              : 'Tài khoản chưa có quyền dùng AI.'),
         );
         return;
       }
       if (prepared.status === 'empty' || prepared.code === 'LEDGER_EMPTY') {
-        setError(english ? 'Your Gold Ledger is empty. Open Gold Ledger to add a transaction.' : 'Sổ vàng của bạn chưa có giao dịch. Hãy mở Sổ vàng để thêm giao dịch.');
+        setError(
+          english
+            ? 'Your Gold Ledger is empty. Open Gold Ledger to add a transaction.'
+            : 'Sổ vàng của bạn chưa có giao dịch. Hãy mở Sổ vàng để thêm giao dịch.',
+        );
         return;
       }
       if (!prepared.ready) {
@@ -814,20 +1038,32 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           setMissingQuestionNeeds(prepared.needs);
           setError('');
         } else {
-          setError(english ? 'Add information for this analysis.' : 'Bổ sung thông tin cho lượt này.');
+          setError(
+            english
+              ? 'Add information for this analysis.'
+              : 'Bổ sung thông tin cho lượt này.',
+          );
         }
         return;
       }
-      setProgress(english ? 'Loading data and analyzing' : 'Đang lấy dữ liệu và phân tích');
+      setProgress(
+        english
+          ? 'Loading data and analyzing'
+          : 'Đang lấy dữ liệu và phân tích',
+      );
       await analyze(input, controller.signal);
     } catch (cause) {
       setRetryAvailable(!controller.signal.aborted);
       setError(
         controller.signal.aborted
-          ? (english ? 'Analysis stopped. You can send it again.' : 'Đã dừng phân tích. Bạn có thể gửi lại.')
+          ? english
+            ? 'Analysis stopped. You can send it again.'
+            : 'Đã dừng phân tích. Bạn có thể gửi lại.'
           : cause instanceof Error
             ? localizedAnalysisMessage(cause.message, locale)
-            : (english ? 'Unable to complete the analysis.' : 'Không thể hoàn tất phân tích.'),
+            : english
+              ? 'Unable to complete the analysis.'
+              : 'Không thể hoàn tất phân tích.',
       );
     } finally {
       operation.current = null;
@@ -874,10 +1110,19 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(localizedAnalysisMessage(body?.error ?? 'Không thể bắt đầu phân tích.', requestLocale));
+        throw new Error(
+          localizedAnalysisMessage(
+            body?.error ?? 'Không thể bắt đầu phân tích.',
+            requestLocale,
+          ),
+        );
       }
       if (!response.body)
-        throw new Error(requestLocale === 'en' ? 'The server did not return a data stream.' : 'Máy chủ không trả về luồng dữ liệu.');
+        throw new Error(
+          requestLocale === 'en'
+            ? 'The server did not return a data stream.'
+            : 'Máy chủ không trả về luồng dữ liệu.',
+        );
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -907,14 +1152,23 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             setSuggestions('');
             setWarning('');
             setError('');
-            if (typeof payload.message === 'string') setProgress(payload.message);
+            if (typeof payload.message === 'string')
+              setProgress(payload.message);
           } else if (payload.type === 'conversation') {
             if (typeof payload.conversationId === 'string') {
               setConversationId(payload.conversationId);
-              window.history.replaceState({}, '', `/phan-tich?conversation=${encodeURIComponent(payload.conversationId)}`);
+              window.history.replaceState(
+                {},
+                '',
+                `/phan-tich?conversation=${encodeURIComponent(payload.conversationId)}`,
+              );
             }
-            if (typeof payload.conversationVersion === 'number') setConversationVersion(payload.conversationVersion);
-          } else if (payload.type === 'delta' && typeof payload.delta === 'string') {
+            if (typeof payload.conversationVersion === 'number')
+              setConversationVersion(payload.conversationVersion);
+          } else if (
+            payload.type === 'delta' &&
+            typeof payload.delta === 'string'
+          ) {
             finalAnswer += payload.delta;
             setAnswer(finalAnswer);
           } else if (payload.type === 'forecast' && payload.forecast) {
@@ -938,8 +1192,10 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             finished = true;
             if (typeof payload.requestId === 'string')
               setRequestId(payload.requestId);
-            if (typeof payload.conversationId === 'string') setConversationId(payload.conversationId);
-            if (typeof payload.conversationVersion === 'number') setConversationVersion(payload.conversationVersion);
+            if (typeof payload.conversationId === 'string')
+              setConversationId(payload.conversationId);
+            if (typeof payload.conversationVersion === 'number')
+              setConversationVersion(payload.conversationVersion);
             if (payload.completion === 'limited')
               setWarning(
                 requestLocale === 'en'
@@ -978,9 +1234,11 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             const labels = (payload.needs as Array<{ label?: unknown }>)
               .map((item) => (typeof item.label === 'string' ? item.label : ''))
               .filter(Boolean);
-            setError(requestLocale === 'en'
-              ? `More information is needed: ${labels.join(', ')}.`
-              : `Cần bổ sung: ${labels.join(' và ')}.`);
+            setError(
+              requestLocale === 'en'
+                ? `More information is needed: ${labels.join(', ')}.`
+                : `Cần bổ sung: ${labels.join(' và ')}.`,
+            );
           } else if (
             payload.type === 'warning' &&
             typeof payload.message === 'string'
@@ -1001,7 +1259,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 ? ` (${requestLocale === 'en' ? 'Reference' : 'Mã đối chiếu'}: ${payload.requestId.slice(0, 8)})`
                 : '';
             throw new Error(
-              localizedAnalysisMessage(payload.message, requestLocale) + requestSuffix,
+              localizedAnalysisMessage(payload.message, requestLocale) +
+                requestSuffix,
             );
           }
         }
@@ -1015,8 +1274,16 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       const nextMessages = finalAnswer
         ? [
             ...messages,
-            { role: 'user' as const, content: currentQuestion, locale: requestLocale },
-            { role: 'assistant' as const, content: finalAnswer, locale: requestLocale },
+            {
+              role: 'user' as const,
+              content: currentQuestion,
+              locale: requestLocale,
+            },
+            {
+              role: 'assistant' as const,
+              content: finalAnswer,
+              locale: requestLocale,
+            },
           ]
         : messages;
       setMessages(nextMessages);
@@ -1060,10 +1327,25 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   };
 
   const deleteAllHistory = async () => {
-    if (busy || !window.confirm(english ? 'Delete all saved conversations?' : 'Xóa toàn bộ lịch sử hội thoại?')) return;
-    const response = await fetch('/api/analysis/conversations', { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
+    if (
+      busy ||
+      !window.confirm(
+        english
+          ? 'Delete all saved conversations?'
+          : 'Xóa toàn bộ lịch sử hội thoại?',
+      )
+    )
+      return;
+    const response = await fetch('/api/analysis/conversations', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }).catch(() => null);
     if (!response?.ok) {
-      setHistoryError(english ? 'Unable to delete history.' : 'Không thể xóa lịch sử hội thoại.');
+      setHistoryError(
+        english
+          ? 'Unable to delete history.'
+          : 'Không thể xóa lịch sử hội thoại.',
+      );
       return;
     }
     startNewConversation();
@@ -1071,10 +1353,23 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   };
 
   const deleteConversationById = async (id: string) => {
-    if (busy || !window.confirm(english ? 'Delete this conversation?' : 'Xóa cuộc trò chuyện này?')) return;
-    const response = await fetch(`/api/analysis/conversations/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
+    if (
+      busy ||
+      !window.confirm(
+        english ? 'Delete this conversation?' : 'Xóa cuộc trò chuyện này?',
+      )
+    )
+      return;
+    const response = await fetch(
+      `/api/analysis/conversations/${encodeURIComponent(id)}`,
+      { method: 'DELETE', credentials: 'same-origin' },
+    ).catch(() => null);
     if (!response?.ok) {
-      setHistoryError(english ? 'Unable to delete this conversation.' : 'Không thể xóa cuộc trò chuyện này.');
+      setHistoryError(
+        english
+          ? 'Unable to delete this conversation.'
+          : 'Không thể xóa cuộc trò chuyện này.',
+      );
       return;
     }
     setConversations((items) => items.filter((item) => item.id !== id));
@@ -1114,24 +1409,44 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       onSignOut: () => accountActionsRef.current.signOut(),
     });
     return () => setAccountMenuState(null);
-  }, [access, accessError, signingIn, busy, status, session?.user?.email, locale, setAccountMenuState]);
-  const completedConversationTurns = conversationTurns.filter((item) => item.status === 'completed' && item.answer);
-  const displayedPreviousTurns = answer && completedConversationTurns.at(-1)?.answer === answer
-    ? completedConversationTurns.slice(0, -1)
-    : completedConversationTurns;
+  }, [
+    access,
+    accessError,
+    signingIn,
+    busy,
+    status,
+    session?.user?.email,
+    locale,
+    setAccountMenuState,
+  ]);
+  const completedConversationTurns = conversationTurns.filter(
+    (item) => item.status === 'completed' && item.answer,
+  );
+  const displayedPreviousTurns =
+    answer && completedConversationTurns.at(-1)?.answer === answer
+      ? completedConversationTurns.slice(0, -1)
+      : completedConversationTurns;
 
   return (
-    <main id="main-content" tabIndex={-1} data-hydrated={hydrated ? 'true' : 'false'} className="ai-workspace mx-auto w-full max-w-[1280px] px-4 pb-28 pt-8 sm:px-6 lg:px-8">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      data-hydrated={hydrated ? 'true' : 'false'}
+      className="ai-workspace mx-auto w-full max-w-[1280px] px-4 pb-28 pt-8 sm:px-6 lg:px-8"
+    >
       <div className="ai-page-heading mb-6 flex items-start justify-between gap-5">
         <div className="min-w-0">
           <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
-            <Sparkles className="size-4" /> {english ? 'AI Analysis' : 'Phân tích AI'}
+            <Sparkles className="size-4" />{' '}
+            {english ? 'AI Analysis' : 'Phân tích AI'}
           </p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             {english ? 'AI Analysis' : 'Phân tích AI'}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-            {english ? 'Ask a plain-language question about the gold you are viewing.' : 'Đặt câu hỏi dễ hiểu về đúng loại vàng bạn đang xem.'}
+            {english
+              ? 'Ask a plain-language question about the gold you are viewing.'
+              : 'Đặt câu hỏi dễ hiểu về đúng loại vàng bạn đang xem.'}
           </p>
         </div>
       </div>
@@ -1157,32 +1472,97 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         </button>
       </div>
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto sm:max-w-md"
+        >
           <SheetHeader>
-            <SheetTitle>{english ? 'AI conversation history' : 'Lịch sử Hỏi AI'}</SheetTitle>
+            <SheetTitle>
+              {english ? 'AI conversation history' : 'Lịch sử Hỏi AI'}
+            </SheetTitle>
             <SheetDescription>
-              {english ? 'Saved on the server for 30 days after your last question.' : 'Lưu trên máy chủ trong 30 ngày kể từ câu hỏi gần nhất.'}
+              {english
+                ? 'Saved on the server for 30 days after your last question.'
+                : 'Lưu trên máy chủ trong 30 ngày kể từ câu hỏi gần nhất.'}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-5 flex items-center justify-between gap-2">
-            <button type="button" disabled={busy || historyLoading || !conversations.length} onClick={() => void deleteAllHistory()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-destructive/30 px-3 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50">
-              <Trash2 className="size-3.5" /> {english ? 'Delete all' : 'Xóa toàn bộ'}
+            <button
+              type="button"
+              disabled={busy || historyLoading || !conversations.length}
+              onClick={() => void deleteAllHistory()}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-destructive/30 px-3 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" />{' '}
+              {english ? 'Delete all' : 'Xóa toàn bộ'}
             </button>
-            <button type="button" disabled={busy || historyLoading} onClick={() => void loadConversationList()} className="text-xs text-muted-foreground underline underline-offset-2">
+            <button
+              type="button"
+              disabled={busy || historyLoading}
+              onClick={() => void loadConversationList()}
+              className="text-xs text-muted-foreground underline underline-offset-2"
+            >
               {english ? 'Refresh' : 'Tải lại'}
             </button>
           </div>
-          {historyError ? <p role="alert" className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{historyError}</p> : null}
-          {historyLoading ? <p className="mt-5 text-sm text-muted-foreground">{english ? 'Loading…' : 'Đang tải…'}</p> : null}
-          {!historyLoading && !conversations.length ? <p className="mt-5 text-sm text-muted-foreground">{english ? 'No saved conversations yet.' : 'Chưa có cuộc trò chuyện nào được lưu.'}</p> : null}
+          {historyError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive"
+            >
+              {historyError}
+            </p>
+          ) : null}
+          {historyLoading ? (
+            <p className="mt-5 text-sm text-muted-foreground">
+              {english ? 'Loading…' : 'Đang tải…'}
+            </p>
+          ) : null}
+          {!historyLoading && !conversations.length ? (
+            <p className="mt-5 text-sm text-muted-foreground">
+              {english
+                ? 'No saved conversations yet.'
+                : 'Chưa có cuộc trò chuyện nào được lưu.'}
+            </p>
+          ) : null}
           <div className="mt-4 space-y-2">
             {conversations.map((item) => (
-              <div key={item.id} className={`rounded-xl border p-3 ${conversationId === item.id ? 'border-primary bg-accent/40' : 'border-border bg-card'}`}>
-                <button type="button" disabled={busy} onClick={() => void loadConversation(item.id).catch((cause) => setHistoryError(cause instanceof Error ? cause.message : 'Unable to load conversation.'))} className="block min-h-11 w-full text-left disabled:opacity-50">
-                  <span className="block line-clamp-2 text-sm font-medium">{item.title}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{item.turnCount} {english ? 'turns' : 'lượt'} · {new Intl.DateTimeFormat(english ? 'en-US' : 'vi-VN', { dateStyle: 'medium' }).format(new Date(item.updatedAt))}</span>
+              <div
+                key={item.id}
+                className={`rounded-xl border p-3 ${conversationId === item.id ? 'border-primary bg-accent/40' : 'border-border bg-card'}`}
+              >
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void loadConversation(item.id).catch((cause) =>
+                      setHistoryError(
+                        cause instanceof Error
+                          ? cause.message
+                          : 'Unable to load conversation.',
+                      ),
+                    )
+                  }
+                  className="block min-h-11 w-full text-left disabled:opacity-50"
+                >
+                  <span className="block line-clamp-2 text-sm font-medium">
+                    {item.title}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {item.turnCount} {english ? 'turns' : 'lượt'} ·{' '}
+                    {new Intl.DateTimeFormat(english ? 'en-US' : 'vi-VN', {
+                      dateStyle: 'medium',
+                    }).format(new Date(item.updatedAt))}
+                  </span>
                 </button>
-                <button type="button" disabled={busy} onClick={() => void deleteConversationById(item.id)} className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs text-destructive underline underline-offset-2 disabled:opacity-50"><Trash2 className="size-3" /> {english ? 'Delete' : 'Xóa'}</button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteConversationById(item.id)}
+                  className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs text-destructive underline underline-offset-2 disabled:opacity-50"
+                >
+                  <Trash2 className="size-3" /> {english ? 'Delete' : 'Xóa'}
+                </button>
               </div>
             ))}
           </div>
@@ -1211,7 +1591,6 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         ))}
       </div>
       <div className="ai-content-grid mx-auto w-full max-w-[1040px]">
-
         <section className="min-w-0">
           <div className="ai-question-panel glass-panel p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1220,7 +1599,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                   {english ? 'Analysis depth' : 'Độ sâu phân tích'}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {english ? 'Data' : 'Dữ liệu'}: {analysisRangeLabel(range, locale)}
+                  {english ? 'Data' : 'Dữ liệu'}:{' '}
+                  {analysisRangeLabel(range, locale)}
                 </p>
                 <div className="mt-1 flex gap-1 rounded-xl bg-muted p-1">
                   <button
@@ -1246,12 +1626,40 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
               <div />
             </div>
             {goal === 'hold' ? (
-              <div className="mb-4 rounded-xl border border-accent bg-accent/30 px-3 py-2 text-xs" aria-live="polite">
+              <div
+                className="mb-4 rounded-xl border border-accent bg-accent/30 px-3 py-2 text-xs"
+                aria-live="polite"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold">{english ? 'Your Gold Ledger' : 'Sổ vàng của bạn'}</span>
-                  <Link href="/so-vang" className="font-medium text-primary underline underline-offset-2">{english ? 'Open Gold Ledger' : 'Mở Sổ vàng'}</Link>
+                  <span className="font-semibold">
+                    {english ? 'Your Gold Ledger' : 'Sổ vàng của bạn'}
+                  </span>
+                  <Link
+                    href="/so-vang"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    {english ? 'Open Gold Ledger' : 'Mở Sổ vàng'}
+                  </Link>
                 </div>
-                {ledgerLoading ? <p className="mt-1 text-muted-foreground">{english ? 'Loading your ledger…' : 'Đang tải Sổ vàng…'}</p> : ledgerError ? <p className="mt-1 text-destructive">{ledgerError}</p> : holdSummary && holdProducts.length ? <p className="mt-1 text-muted-foreground">{english ? `${holdSummary.openQuantityLuong.toFixed(4)} lượng currently held · ${holdProducts.length} products` : `Đang giữ ${holdSummary.openQuantityLuong.toFixed(4)} lượng · ${holdProducts.length} nhóm sản phẩm`}</p> : <p className="mt-1 text-muted-foreground">{english ? 'Your Gold Ledger is empty.' : 'Sổ vàng của bạn chưa có giao dịch.'}</p>}
+                {ledgerLoading ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {english ? 'Loading your ledger…' : 'Đang tải Sổ vàng…'}
+                  </p>
+                ) : ledgerError ? (
+                  <p className="mt-1 text-destructive">{ledgerError}</p>
+                ) : holdSummary && holdProducts.length ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {english
+                      ? `${holdSummary.openQuantityLuong.toFixed(4)} lượng currently held · ${holdProducts.length} products`
+                      : `Đang giữ ${holdSummary.openQuantityLuong.toFixed(4)} lượng · ${holdProducts.length} nhóm sản phẩm`}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-muted-foreground">
+                    {english
+                      ? 'Your Gold Ledger is empty.'
+                      : 'Sổ vàng của bạn chưa có giao dịch.'}
+                  </p>
+                )}
               </div>
             ) : null}
             <form onSubmit={submit}>
@@ -1281,24 +1689,49 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 rows={4}
                 disabled={busy}
                 className="min-h-24 w-full resize-y rounded-2xl border border-input bg-background p-4 text-base leading-6 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder={conversationId ? (english ? 'Ask a follow-up in this conversation' : 'Hỏi tiếp trong phiên này') : (english ? 'What would you like to know?' : 'Bạn muốn biết điều gì?')}
+                placeholder={
+                  conversationId
+                    ? english
+                      ? 'Ask a follow-up in this conversation'
+                      : 'Hỏi tiếp trong phiên này'
+                    : english
+                      ? 'What would you like to know?'
+                      : 'Bạn muốn biết điều gì?'
+                }
               />
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 {goal === 'buy'
-                  ? (english ? 'Example: I want to buy one SJC gold chi and hold it for 6 months.' : 'Ví dụ: Tôi muốn mua 1 chỉ nhẫn SJC, dự định giữ 6 tháng.')
-                  : (english ? 'Describe the product, amount, budget, and timeframe you want to analyze.' : 'Hãy nêu loại vàng, số lượng, ngân sách và khoảng thời gian bạn muốn phân tích.')}
+                  ? english
+                    ? 'Example: I want to buy one SJC gold chi and hold it for 6 months.'
+                    : 'Ví dụ: Tôi muốn mua 1 chỉ nhẫn SJC, dự định giữ 6 tháng.'
+                  : english
+                    ? 'Describe the product, amount, budget, and timeframe you want to analyze.'
+                    : 'Hãy nêu loại vàng, số lượng, ngân sách và khoảng thời gian bạn muốn phân tích.'}
               </p>
               {questionContext ? (
-                <p className="mt-2 text-xs leading-5 text-muted-foreground" aria-live="polite">
+                <p
+                  className="mt-2 text-xs leading-5 text-muted-foreground"
+                  aria-live="polite"
+                >
                   {english
                     ? `Scope: ${questionContext.companyLabel} · ${questionContext.productLabel} · ${analysisRangeLabel(questionContext.range, locale)}`
                     : `Phạm vi: ${questionContext.companyLabel} · ${questionContext.productLabel} · ${analysisRangeLabel(questionContext.range, locale)}`}
                 </p>
               ) : null}
               {missingQuestionNeeds.length > 0 ? (
-                <div className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground" aria-live="polite">
-                  <p className="font-medium text-foreground">{english ? 'Please add:' : 'Hãy bổ sung:'}</p>
-                  {missingQuestionNeeds.map((item) => <p key={`${item.label}-${item.reason}`}><span className="font-medium">{item.label}:</span> {item.reason}</p>)}
+                <div
+                  className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground"
+                  aria-live="polite"
+                >
+                  <p className="font-medium text-foreground">
+                    {english ? 'Please add:' : 'Hãy bổ sung:'}
+                  </p>
+                  {missingQuestionNeeds.map((item) => (
+                    <p key={`${item.label}-${item.reason}`}>
+                      <span className="font-medium">{item.label}:</span>{' '}
+                      {item.reason}
+                    </p>
+                  ))}
                 </div>
               ) : null}
               {status !== 'authenticated' && !busy ? (
@@ -1308,15 +1741,26 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                   disabled={signingIn}
                   className="ai-inline-login mt-3 min-h-12 w-full rounded-xl border border-primary/30 bg-primary/5 px-4 text-left text-sm font-semibold text-primary hover:bg-primary/10 sm:w-auto"
                 >
-                  {signingIn ? (english ? 'Opening Google…' : 'Đang chuyển tới Google…') : (english ? 'Sign in with Google to analyze' : 'Đăng nhập Google để phân tích')}
+                  {signingIn
+                    ? english
+                      ? 'Opening Google…'
+                      : 'Đang chuyển tới Google…'
+                    : english
+                      ? 'Sign in with Google to analyze'
+                      : 'Đăng nhập Google để phân tích'}
                   <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    {english ? 'Your question will stay here until you choose Send.' : 'Câu hỏi sẽ được giữ lại; bạn vẫn chủ động bấm Gửi câu hỏi.'}
+                    {english
+                      ? 'Your question will stay here until you choose Send.'
+                      : 'Câu hỏi sẽ được giữ lại; bạn vẫn chủ động bấm Gửi câu hỏi.'}
                   </span>
                 </button>
               ) : null}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-muted-foreground">
-                  {question.length}/1,500 · {english ? 'Press Enter to send on desktop' : 'Enter để gửi trên máy tính'}
+                  {question.length}/1,500 ·{' '}
+                  {english
+                    ? 'Press Enter to send on desktop'
+                    : 'Enter để gửi trên máy tính'}
                 </span>
                 <button
                   type="submit"
@@ -1328,7 +1772,13 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                   ) : (
                     <ArrowRight className="size-4" />
                   )}{' '}
-                  {busy ? (english ? 'Analyzing' : 'Đang phân tích') : (english ? 'Analyze' : 'Phân tích')}
+                  {busy
+                    ? english
+                      ? 'Analyzing'
+                      : 'Đang phân tích'
+                    : english
+                      ? 'Analyze'
+                      : 'Phân tích'}
                 </button>
               </div>
             </form>
@@ -1372,7 +1822,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             </output>
           )}
           {suggestions && <SearchSuggestions html={suggestions} />}
-          {forecast ? <ForecastCard forecast={forecast} locale={locale} /> : null}
+          {forecast ? (
+            <ForecastCard forecast={forecast} locale={locale} />
+          ) : null}
           {facts?.facts.length ? (
             <div lang={answerLocale} className="mt-5 grid gap-3 sm:grid-cols-3">
               {facts.facts.slice(0, 3).map((item) => (
@@ -1382,20 +1834,41 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                     {formatValue(item.value, item.unit, locale)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {item.assumption ?? item.unit ?? (english ? 'Calculated from data' : 'Đã tính từ dữ liệu')}
+                    {item.assumption ??
+                      item.unit ??
+                      (english ? 'Calculated from data' : 'Đã tính từ dữ liệu')}
                   </p>
                 </div>
               ))}
             </div>
           ) : null}
           {displayedPreviousTurns.length > 0 && (
-            <section className="mt-5 space-y-4" aria-label={english ? 'Earlier turns' : 'Các lượt trước'}>
+            <section
+              className="mt-5 space-y-4"
+              aria-label={english ? 'Earlier turns' : 'Các lượt trước'}
+            >
               {displayedPreviousTurns.map((item) => (
-                <article key={item.id} className="rounded-2xl border border-border bg-card/70 p-5">
-                  <p className="text-sm font-medium leading-6"><span className="mr-2 text-xs font-medium text-primary">{english ? 'You' : 'Bạn'}</span>{item.question}</p>
-                  <div className="mt-4 border-t border-border/70 pt-4" lang={inputLocale(item.locale, locale)}>
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><MessageCircle className="size-4 text-primary" /> AI</div>
-                    <AnswerMarkdown content={item.answer ?? ''} citations={item.citations ?? []} />
+                <article
+                  key={item.id}
+                  className="rounded-2xl border border-border bg-card/70 p-5"
+                >
+                  <p className="text-sm font-medium leading-6">
+                    <span className="mr-2 text-xs font-medium text-primary">
+                      {english ? 'You' : 'Bạn'}
+                    </span>
+                    {item.question}
+                  </p>
+                  <div
+                    className="mt-4 border-t border-border/70 pt-4"
+                    lang={inputLocale(item.locale, locale)}
+                  >
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                      <MessageCircle className="size-4 text-primary" /> AI
+                    </div>
+                    <AnswerMarkdown
+                      content={item.answer ?? ''}
+                      citations={item.citations ?? []}
+                    />
                   </div>
                 </article>
               ))}
@@ -1404,16 +1877,25 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           {answer && (
             <div className="mt-5 rounded-2xl border border-border bg-card p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <MessageCircle className="size-4 text-primary" /> {english ? 'Explanation' : 'Giải thích'}
+                <MessageCircle className="size-4 text-primary" />{' '}
+                {english ? 'Explanation' : 'Giải thích'}
               </div>
               <div lang={answerLocale}>
                 <AnswerMarkdown content={answer} citations={citations} />
               </div>
               {coverage && (
-                <p lang={answerLocale} className="mt-4 text-xs text-muted-foreground">{coverage}</p>
+                <p
+                  lang={answerLocale}
+                  className="mt-4 text-xs text-muted-foreground"
+                >
+                  {coverage}
+                </p>
               )}
               {warning && (
-                <p lang={answerLocale} className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                <p
+                  lang={answerLocale}
+                  className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                >
                   {warning}
                 </p>
               )}
@@ -1422,7 +1904,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                   {english ? 'Data and limits' : 'Số liệu và giới hạn'}
                 </summary>
                 <p className="mt-2">
-                  {english ? 'The figures in the cards come from server data and this analysis. Fallback, stale, or incompletely dated data is not treated as a current price.' : 'Các con số trong thẻ lấy từ dữ liệu server và phép tính của lượt này. Giá dự phòng, dữ liệu cũ hoặc thiếu ngày đối chiếu không được xem là giá mới.'}
+                  {english
+                    ? 'The figures in the cards come from server data and this analysis. Fallback, stale, or incompletely dated data is not treated as a current price.'
+                    : 'Các con số trong thẻ lấy từ dữ liệu server và phép tính của lượt này. Giá dự phòng, dữ liệu cũ hoặc thiếu ngày đối chiếu không được xem là giá mới.'}
                 </p>
               </details>
               {sources.length > 0 && (
@@ -1465,7 +1949,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 />
               </summary>
               <div className="space-y-2 border-t border-border/70 pb-4 pt-3 leading-6">
-                <p className="font-medium text-foreground">{decision.headline}</p>
+                <p className="font-medium text-foreground">
+                  {decision.headline}
+                </p>
                 <p>{decision.summary}</p>
                 {decision.conditions.length > 0 && (
                   <div>
@@ -1502,14 +1988,19 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           )}
           {answer && (
             <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-              <span>{english ? 'Did this result help your decision?' : 'Kết quả này có giúp bạn quyết định?'}</span>
+              <span>
+                {english
+                  ? 'Did this result help your decision?'
+                  : 'Kết quả này có giúp bạn quyết định?'}
+              </span>
               <button
                 type="button"
                 aria-pressed={feedback === 'yes'}
                 onClick={() => void submitFeedback('yes')}
                 className="inline-flex min-h-9 items-center gap-1 hover:text-foreground"
               >
-                <ThumbsUp className="size-3.5" /> {english ? 'Helpful' : 'Hữu ích'}{' '}
+                <ThumbsUp className="size-3.5" />{' '}
+                {english ? 'Helpful' : 'Hữu ích'}{' '}
                 {feedback === 'yes' && <Check className="size-3.5" />}
               </button>
               <button
@@ -1518,7 +2009,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 onClick={() => void submitFeedback('no')}
                 className="inline-flex min-h-9 items-center gap-1 hover:text-foreground"
               >
-                <ThumbsDown className="size-3.5" /> {english ? 'Not helpful' : 'Chưa hữu ích'}{' '}
+                <ThumbsDown className="size-3.5" />{' '}
+                {english ? 'Not helpful' : 'Chưa hữu ích'}{' '}
                 {feedback === 'no' && <Check className="size-3.5" />}
               </button>
             </div>
