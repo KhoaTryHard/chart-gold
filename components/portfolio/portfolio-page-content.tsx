@@ -64,9 +64,20 @@ import {
   parseQuantityInput,
   parseVndInput,
 } from '@/lib/input-parsing';
+import { vietnamDate } from '@/lib/analysis/dates';
+import {
+  isCalendarDate,
+  isPortfolioMarketQuote,
+  portfolioQuotePriceForSide,
+  portfolioPriceVndPerLuongForSave,
+  portfolioUnitFactor,
+  portfolioUnitPriceFromLuong,
+  type PortfolioMarketQuote,
+} from '@/lib/portfolio-market-quote';
 
 const EMPTY_LEDGER: PortfolioLedger = { version: 1, transactions: [] };
-type GoldUnit = 'luong' | 'chi' | 'gram';
+type GoldUnit = 'luong' | 'chi';
+type DraftPriceMode = 'empty' | 'manual' | 'listed';
 
 type LedgerDraft = {
   date: string;
@@ -76,6 +87,8 @@ type LedgerDraft = {
   quantity: string;
   unit: GoldUnit;
   price: string;
+  priceMode: DraftPriceMode;
+  unitPriceVndPerLuong: number | null;
   fees: string;
   purchaseVenue: string;
   saleVenue: string;
@@ -85,11 +98,10 @@ type LedgerDraft = {
 const units: Array<{ value: GoldUnit; label: string; factor: number }> = [
   { value: 'chi', label: 'chỉ', factor: 0.1 },
   { value: 'luong', label: 'lượng', factor: 1 },
-  { value: 'gram', label: 'gram', factor: 1 / 37.5 },
 ];
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return vietnamDate();
 }
 
 function initialDraft(): LedgerDraft {
@@ -101,6 +113,8 @@ function initialDraft(): LedgerDraft {
     quantity: '',
     unit: 'chi',
     price: '',
+    priceMode: 'empty',
+    unitPriceVndPerLuong: null,
     fees: '',
     purchaseVenue: '',
     saleVenue: '',
@@ -128,6 +142,12 @@ export function PortfolioPageContent() {
   const account = session?.user?.email?.trim().toLowerCase() ?? '';
   const [ledger, setLedger] = useState<PortfolioLedger>(EMPTY_LEDGER);
   const [draft, setDraft] = useState<LedgerDraft>(() => initialDraft());
+  const [draftQuote, setDraftQuote] = useState<{
+    key: string;
+    quote: PortfolioMarketQuote;
+  } | null>(null);
+  const [draftQuoteLoading, setDraftQuoteLoading] = useState(false);
+  const [draftQuoteNonce, setDraftQuoteNonce] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [quotes, setQuotes] = useState<Map<string, LedgerQuote>>(new Map());
@@ -521,17 +541,217 @@ export function PortfolioPageContent() {
   const products = getMarketProducts(draft.companyId);
   const selectedProduct =
     products.find((product) => product.id === draft.productId) ?? products[0];
+  const draftQuoteKey = `${draft.companyId}:${draft.productId}:${draft.date}`;
+  const activeDraftQuote =
+    draftQuote?.key === draftQuoteKey ? draftQuote.quote : null;
+  const quotedUnitPrice = activeDraftQuote
+    ? portfolioQuotePriceForSide(activeDraftQuote, draft.side)
+    : null;
+  const parsedDraftQuantity = parseQuantityInput(draft.quantity);
+  const parsedDisplayPrice = parseVndInput(draft.price, false);
+  const draftGoldAmount =
+    parsedDraftQuantity.value &&
+    !parsedDraftQuantity.error &&
+    parsedDisplayPrice.value &&
+    !parsedDisplayPrice.error
+      ? parsedDraftQuantity.value * parsedDisplayPrice.value
+      : null;
 
   const updateDraft = <K extends keyof LedgerDraft>(
     key: K,
     value: LedgerDraft[K],
   ) => {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => {
+      if (key === 'unit') {
+        const unit = value as GoldUnit;
+        const canonical = current.unitPriceVndPerLuong;
+        return {
+          ...current,
+          unit,
+          price:
+            canonical && canonical > 0
+              ? formatVndInput(portfolioUnitPriceFromLuong(canonical, unit))
+              : current.price,
+        };
+      }
+      const next = { ...current, [key]: value };
+      if (
+        (key === 'companyId' ||
+          key === 'productId' ||
+          key === 'date' ||
+          key === 'side') &&
+        current.priceMode === 'listed'
+      ) {
+        next.price = '';
+        next.priceMode = 'empty';
+        next.unitPriceVndPerLuong = null;
+      }
+      return next;
+    });
     setNotice('');
   };
 
+  const updateManualPrice = (value: string) => {
+    setDraft((current) => {
+      const parsed = parseVndInput(value, false);
+      const factor = portfolioUnitFactor(current.unit);
+      return {
+        ...current,
+        price: value,
+        priceMode: 'manual',
+        unitPriceVndPerLuong:
+          parsed.value && !parsed.error
+            ? Math.round(parsed.value / factor)
+            : null,
+      };
+    });
+    setNotice('');
+  };
+
+  const useListedPrice = () => {
+    if (!activeDraftQuote || !quotedUnitPrice || quotedUnitPrice <= 0) return;
+    setDraft((current) => ({
+      ...current,
+      price: formatVndInput(
+        portfolioUnitPriceFromLuong(quotedUnitPrice, current.unit),
+      ),
+      priceMode: 'listed',
+      unitPriceVndPerLuong: quotedUnitPrice,
+    }));
+    setNotice('');
+  };
+
+  useEffect(() => {
+    if (
+      !isMarketCompanyId(draft.companyId) ||
+      !isMarketProductId(draft.companyId, draft.productId) ||
+      !isCalendarDate(draft.date)
+    ) {
+      queueMicrotask(() => {
+        setDraftQuote(null);
+        setDraftQuoteLoading(false);
+      });
+      return;
+    }
+    const controller = new AbortController();
+    const key = draftQuoteKey;
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      setDraftQuote(null);
+      setDraftQuoteLoading(true);
+    });
+    const params = new URLSearchParams({
+      company: draft.companyId,
+      product: draft.productId,
+      date: draft.date,
+    });
+    void fetch(`/api/market-quote?${params}`, {
+      signal: controller.signal,
+      cache: 'default',
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Market quote unavailable');
+        const body: unknown = await response.json();
+        if (
+          !isPortfolioMarketQuote(
+            body,
+            draft.companyId,
+            draft.productId,
+            draft.date,
+          )
+        )
+          throw new Error('Market quote identity mismatch');
+        if (!controller.signal.aborted) setDraftQuote({ key, quote: body });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setDraftQuote({
+            key,
+            quote: {
+              companyId: draft.companyId,
+              productId: draft.productId,
+              requestedDate: draft.date,
+              quoteDate: null,
+              buyVndPerLuong: null,
+              sellVndPerLuong: null,
+              status: 'unavailable',
+              source: null,
+              observedAt: null,
+              expiresAt: null,
+              reason: english
+                ? 'Could not load the quote. Enter the price manually.'
+                : 'Không tải được giá niêm yết. Bạn có thể nhập giá thủ công.',
+            },
+          });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDraftQuoteLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    draft.companyId,
+    draft.productId,
+    draft.date,
+    draftQuoteKey,
+    draftQuoteNonce,
+    english,
+  ]);
+
+  useEffect(() => {
+    if (
+      !activeDraftQuote ||
+      activeDraftQuote.status === 'unavailable' ||
+      !quotedUnitPrice ||
+      quotedUnitPrice <= 0 ||
+      !parsedDraftQuantity.value ||
+      parsedDraftQuantity.error ||
+      draft.priceMode === 'manual'
+    )
+      return;
+    const price = formatVndInput(
+      portfolioUnitPriceFromLuong(quotedUnitPrice, draft.unit),
+    );
+    queueMicrotask(() => {
+      setDraft((current) => {
+        const currentQuantity = parseQuantityInput(current.quantity);
+        if (
+          current.priceMode === 'manual' ||
+          !currentQuantity.value ||
+          currentQuantity.error ||
+          current.companyId !== activeDraftQuote.companyId ||
+          current.productId !== activeDraftQuote.productId ||
+          current.date !== activeDraftQuote.requestedDate ||
+          current.side !== draft.side ||
+          current.unit !== draft.unit ||
+          (current.priceMode === 'listed' &&
+            current.price === price &&
+            current.unitPriceVndPerLuong === quotedUnitPrice)
+        )
+          return current;
+        return {
+          ...current,
+          price,
+          priceMode: 'listed',
+          unitPriceVndPerLuong: quotedUnitPrice,
+        };
+      });
+    });
+  }, [
+    activeDraftQuote,
+    quotedUnitPrice,
+    parsedDraftQuantity.value,
+    parsedDraftQuantity.error,
+    draft.priceMode,
+    draft.side,
+    draft.unit,
+  ]);
+
   const resetDraft = () => {
     setDraft(initialDraft());
+    setDraftQuote(null);
+    setDraftQuoteLoading(false);
+    setDraftQuoteNonce((current) => current + 1);
     setEditingId(null);
   };
 
@@ -568,7 +788,11 @@ export function PortfolioPageContent() {
       companyId: draft.companyId,
       productId: selectedProduct.id,
       quantityLuong: parsedQuantity.value * unit.factor,
-      unitPriceVnd: parsedPrice.value,
+      unitPriceVnd: portfolioPriceVndPerLuongForSave(
+        parsedPrice.value,
+        draft.unit,
+        draft.unitPriceVndPerLuong,
+      ),
       feesVnd: parsedFees.value ?? 0,
       ...(draft.purchaseVenue.trim()
         ? { purchaseVenue: draft.purchaseVenue.trim() }
@@ -603,7 +827,11 @@ export function PortfolioPageContent() {
       productId: transaction.productId,
       quantity: String(transaction.quantityLuong * 10),
       unit: 'chi',
-      price: formatVndInput(transaction.unitPriceVnd),
+      price: formatVndInput(
+        portfolioUnitPriceFromLuong(transaction.unitPriceVnd, 'chi'),
+      ),
+      priceMode: 'manual',
+      unitPriceVndPerLuong: transaction.unitPriceVnd,
       fees: transaction.feesVnd ? formatVndInput(transaction.feesVnd) : '',
       purchaseVenue: transaction.purchaseVenue ?? '',
       saleVenue: transaction.saleVenue ?? '',
@@ -1092,18 +1320,98 @@ export function PortfolioPageContent() {
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
-            {english ? 'Actual price / lượng (VND)' : 'Giá thực tế / lượng (đ)'}
+          <div className="text-sm font-medium">
+            <label htmlFor="ledger-actual-price">
+              {english
+                ? `Actual price / ${draft.unit === 'chi' ? 'chỉ' : 'lượng'} (VND)`
+                : `Giá thực tế / ${draft.unit === 'chi' ? 'chỉ' : 'lượng'} (đ)`}
+            </label>
             <Input
+              id="ledger-actual-price"
               value={draft.price}
-              onChange={(event) => updateDraft('price', event.target.value)}
+              onChange={(event) => updateManualPrice(event.target.value)}
               inputMode="numeric"
               placeholder={
-                english ? 'For example: 150000000' : 'Ví dụ: 150.000.000'
+                draft.unit === 'chi'
+                  ? english
+                    ? 'For example: 15,000,000'
+                    : 'Ví dụ: 15.000.000'
+                  : english
+                    ? 'For example: 150,000,000'
+                    : 'Ví dụ: 150.000.000'
               }
               className="mt-1.5 h-11"
             />
-          </label>
+            <p
+              className="mt-1 min-h-8 text-xs font-normal text-muted-foreground"
+              aria-live="polite"
+            >
+              {draft.priceMode === 'manual'
+                ? english
+                  ? 'Manual price is kept when you change the selection.'
+                  : 'Đang dùng giá bạn nhập; giá tay được giữ khi đổi lựa chọn.'
+                : draftQuoteLoading
+                  ? english
+                    ? 'Loading the quote for this product and date…'
+                    : 'Đang tải giá niêm yết đúng sản phẩm và ngày giao dịch…'
+                  : activeDraftQuote?.status === 'unavailable'
+                    ? (activeDraftQuote.reason ??
+                      (english
+                        ? 'No verified quote for this date. Enter the price manually.'
+                        : 'Chưa có giá xác minh đúng ngày; vui lòng nhập tay.'))
+                    : activeDraftQuote && quotedUnitPrice
+                      ? draft.priceMode === 'listed'
+                        ? `${
+                            activeDraftQuote.status === 'current'
+                              ? english
+                                ? 'Current listed quote'
+                                : 'Giá niêm yết hiện tại'
+                              : english
+                                ? 'Historical quote'
+                                : 'Giá lịch sử'
+                          } · ${
+                            draft.side === 'buy'
+                              ? english
+                                ? 'dealer sell price'
+                                : 'giá cửa hàng bán ra'
+                              : english
+                                ? 'dealer buy price'
+                                : 'giá cửa hàng mua vào'
+                          } · ${activeDraftQuote.source?.provider ?? ''} · ${
+                            activeDraftQuote.quoteDate
+                              ?.split('-')
+                              .reverse()
+                              .join('/') ?? ''
+                          }`
+                        : english
+                          ? 'A quote is available. Enter a positive quantity to fill it automatically.'
+                          : 'Đã có giá niêm yết; nhập khối lượng lớn hơn 0 để tự điền.'
+                      : english
+                        ? 'No verified quote for this date. Enter the price manually.'
+                        : 'Chưa có báo giá xác minh đúng ngày; vui lòng nhập giá thủ công.'}
+            </p>
+            {activeDraftQuote &&
+            activeDraftQuote.status !== 'unavailable' &&
+            quotedUnitPrice ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-1 h-8 px-2 text-xs"
+                onClick={useListedPrice}
+              >
+                {english ? 'Use listed price' : 'Dùng giá niêm yết'}
+              </Button>
+            ) : null}
+            {draftGoldAmount !== null ? (
+              <p className="mt-1 text-xs font-normal text-muted-foreground">
+                {english ? 'Gold amount:' : 'Tiền vàng theo khối lượng:'}{' '}
+                {formatVnd(draftGoldAmount, english)}.{' '}
+                {english
+                  ? 'Fees are entered separately.'
+                  : 'Phí được nhập riêng.'}
+              </p>
+            ) : null}
+          </div>
           <label className="text-sm font-medium">
             {english ? 'Fees (VND)' : 'Phí (đ)'}
             <Input

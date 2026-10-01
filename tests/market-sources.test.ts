@@ -18,6 +18,7 @@ import {
   presentMarketProduct,
 } from '@/lib/market-sources';
 import { getMarketData } from '@/lib/server/sjc';
+import { shiftDate, vietnamDate } from '@/lib/analysis/dates';
 
 describe('market source registry', () => {
   afterEach(() => {
@@ -421,6 +422,55 @@ describe('market source registry', () => {
     );
     expect(rawMaterial).toBeDefined();
     expect(rawMaterial && isMarketProductSelectable(rawMaterial)).toBe(false);
+  });
+
+  it('loads BTMC official history in history-only view when its live page is unavailable', async () => {
+    vi.resetModules();
+    const date = shiftDate(vietnamDate(), -1);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.includes('btmc.vn/ProductHome/getGoldDate'))
+        throw new Error(`unexpected upstream ${url}`);
+      return Response.json({
+        Data: {
+          btmcvangnhanmua: '<b>14500</b>',
+          btmcvangnhanban: '<b>14900</b>',
+        },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { getMarketData: getFreshMarketData } = await import(
+      '@/lib/server/sjc'
+    );
+    const market = await getFreshMarketData('btmc', 'btmc-ring', {
+      view: 'history',
+      historyDays: 1,
+    });
+
+    expect(market).toMatchObject({
+      mode: 'delayed',
+      availability: 'available',
+      source: {
+        provider: 'Bảo Tín Minh Châu official (history)',
+        official: true,
+      },
+      latest: { date, buy: 145, sell: 149 },
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const input = fetchMock.mock.calls[0]?.[0];
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input?.url;
+    expect(url).toContain('date=');
   });
 
   it('keeps Mi Hồng explicit unavailable while its official domain is inactive', async () => {

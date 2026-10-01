@@ -612,7 +612,10 @@ async function getBtmcWithFallback(
     () => fetchBtmcHistory(product, options.historyDays),
     // Do not spend another seven upstream timeouts before trying the known,
     // exact Vang.Today code when today's official page is unavailable.
-    { ...options, loadHistoryWhenQuoteUnavailable: false },
+    {
+      ...options,
+      loadHistoryWhenQuoteUnavailable: options.view === 'history',
+    },
   );
   if (official.availability === 'available') return official;
 
