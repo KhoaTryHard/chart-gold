@@ -84,6 +84,40 @@ const quoteResponse = {
   source: { provider: 'SJC', url: 'https://sjc.com.vn', official: true },
 };
 
+test('separates Sunday retrieval from Saturday publication without assuming a source outage', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-04T08:30:00Z'));
+  await page.route('**/api/sjc?*', (route) => route.fulfill({ json: {
+    ...quoteResponse,
+    timestampKind: 'source',
+    observedAt: '2026-10-03T00:57:00Z',
+    sourcePublishedAt: '2026-10-03T00:57:00Z',
+    fetchedAt: '2026-10-04T08:29:00Z',
+    // Deliberately stale computed metadata: UI must use timestamps instead.
+    freshness: { evaluatedAt: '2026-10-03T00:57:00Z', recordAgeSeconds: 0, sourceAgeSeconds: 0 },
+  } }));
+  await page.goto('/');
+  const status = page.getByLabel('Trạng thái nguồn giá');
+  await expect(status).toContainText('Giá công bố gần nhất');
+  await expect(status).toContainText('Nguồn công bố');
+  await expect(status).toContainText('1 ngày trước');
+  await expect(status).toContainText('Hệ thống lấy dữ liệu');
+  await expect(status).toContainText(/03[/-]10/);
+  await expect(status).toContainText(/04[/-]10/);
+  await expect(page.getByText('Nguồn đang trễ', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Nguồn giá đang cập nhật chậm hơn bình thường/)).toHaveCount(0);
+});
+
+test('does not label retrieval-only time as source publication', async ({ page }) => {
+  await page.route('**/api/sjc?*', (route) => route.fulfill({ json: {
+    ...quoteResponse, timestampKind: 'retrieval-or-date', fetchedAt: quoteResponse.generatedAt,
+  } }));
+  await page.goto('/');
+  const status = page.getByLabel('Trạng thái nguồn giá');
+  await expect(status).toContainText('Ghi nhận');
+  await expect(status).toContainText('Hệ thống lấy dữ liệu');
+  await expect(status).not.toContainText('Nguồn công bố');
+});
+
 test('explains the price page before the picker and updates prices and chart units together', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/sjc?*', (route) =>

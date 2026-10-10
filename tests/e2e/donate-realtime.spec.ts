@@ -19,11 +19,12 @@ test.describe('DONATE realtime leaderboard', () => {
   );
   test.describe.configure({ mode: 'serial' });
 
-  test('updates two open pages after a real SePay webhook within five seconds', async ({
+  test('confirms the payer within five seconds and updates other pages within thirty seconds', async ({
     page,
     browser,
     request,
   }) => {
+    test.setTimeout(90_000);
     const pool = new Pool({ connectionString: e2eDatabaseUrl });
     const userId = randomUUID();
     const adminId = randomUUID();
@@ -34,6 +35,10 @@ test.describe('DONATE realtime leaderboard', () => {
     const displayName = 'E2E Nhà hảo tâm';
     const sepayId = Date.now();
     try {
+      const database = new URL(e2eDatabaseUrl!);
+      if (!['127.0.0.1', 'localhost'].includes(database.hostname) || !/test/i.test(database.pathname))
+        throw new Error('Rate-limit fixture reset requires a local test database.');
+      await pool.query("delete from request_rate_limit_buckets where key like 'donation-order-%'");
       await pool.query(
         `insert into users (id, google_subject, email, name)
          values ($1, $2, $3, $4)`,
@@ -61,10 +66,10 @@ test.describe('DONATE realtime leaderboard', () => {
       const secondPage = await browser.newPage({ baseURL });
       await Promise.all([page.goto('/donate'), secondPage.goto('/donate')]);
       await expect(
-        page.getByRole('heading', { name: 'Top nhà hảo tâm' }),
+        page.getByRole('heading', { name: 'Người đồng hành' }),
       ).toBeVisible();
       await expect(
-        secondPage.getByRole('heading', { name: 'Top nhà hảo tâm' }),
+        secondPage.getByRole('heading', { name: 'Người đồng hành' }),
       ).toBeVisible();
 
       const session = await page.evaluate(async () => {
@@ -76,6 +81,7 @@ test.describe('DONATE realtime leaderboard', () => {
       expect(session.user.email).toBe(`${userId}@example.test`);
       await page.getByRole('button', { name: 'Ủng hộ 100.000đ' }).click();
       await expect(page.getByAltText('QR ủng hộ Kim Tuyến')).not.toBeVisible();
+      await page.getByRole('checkbox', { name: 'Ủng hộ ẩn danh — không hiển thị tên trên bảng' }).uncheck();
       await page
         .getByPlaceholder('Tên hiển thị trên bảng tri ân')
         .fill(displayName);
@@ -86,7 +92,9 @@ test.describe('DONATE realtime leaderboard', () => {
           response.request().method() === 'POST',
       );
       await page.getByRole('button', { name: 'Tạo mã QR ủng hộ' }).click();
-      const created = (await (await createResponse).json()) as {
+      const responseToCreate = await createResponse;
+      expect(responseToCreate.status(), await responseToCreate.text()).toBe(200);
+      const created = (await responseToCreate.json()) as {
         order?: { id: string; orderCode: string; status: string };
       };
       expect(created.order?.status).toBe('pending');
@@ -125,16 +133,19 @@ test.describe('DONATE realtime leaderboard', () => {
       });
       expect(response.ok()).toBe(true);
 
+      await expect(page.getByText(/Đã xác nhận lúc/)).toBeVisible({ timeout: 5_000 });
+      expect(Date.now() - startedAt).toBeLessThanOrEqual(5_000);
       for (const openPage of [page, secondPage]) {
         const row = openPage
           .locator('li')
           .filter({ hasText: displayName })
           .first();
-        await expect(row).toBeVisible({ timeout: 5_000 });
+        const deadline = openPage === page ? 5_000 : 30_000;
+        await expect(row).toBeVisible({ timeout: Math.max(1, deadline - (Date.now() - startedAt)) });
         await expect(row).toContainText('100.000');
         await expect(row.locator('span').first()).toHaveText('1');
       }
-      expect(Date.now() - startedAt).toBeLessThanOrEqual(5_000);
+      expect(Date.now() - startedAt).toBeLessThanOrEqual(30_000);
       const duplicateResponses = await Promise.all([
         request.post('/api/webhooks/sepay', {
           data: rawBody,
@@ -161,7 +172,7 @@ test.describe('DONATE realtime leaderboard', () => {
         [orderId],
       );
       expect(stored.rows).toEqual([
-        { status: 'paid', sepay_transaction_id: sepayId },
+        { status: 'paid', sepay_transaction_id: String(sepayId) },
       ]);
 
       reviewOrderId = randomUUID();
@@ -219,7 +230,7 @@ test.describe('DONATE realtime leaderboard', () => {
       expect(adminResponse.ok()).toBe(true);
       await expect(
         page.locator('li').filter({ hasText: displayName }).first(),
-      ).toContainText('150.000', { timeout: 5_000 });
+      ).toContainText('150.000', { timeout: 30_000 });
       await adminContext.close();
       await secondPage.close();
     } finally {

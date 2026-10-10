@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArticleBody } from '@/components/editorial/article-body';
-import { ArticleCard, editorialCategoryLabel } from '@/components/editorial/article-card';
+import {
+  ArticleCard,
+  editorialCategoryLabel,
+} from '@/components/editorial/article-card';
 import { EditorialCover } from '@/components/editorial/editorial-cover';
 import {
   getPublishedArticle,
@@ -11,10 +14,18 @@ import {
 import { editorialCategoryLabels } from '@/lib/editorial/types';
 import { getRequestLocale } from '@/lib/request-locale';
 import { siteUrl } from '@/lib/seo';
+import { createHash } from 'node:crypto';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
+
+// New publications are generated on their first visit without rebuilding.
+export function generateStaticParams() {
+  return [];
+}
 
 function date(value: string, locale: 'vi' | 'en') {
+  if (!Number.isFinite(Date.parse(value)))
+    return locale === 'en' ? 'Date unavailable' : 'Chưa rõ ngày';
   return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'vi-VN', {
     dateStyle: 'medium',
     timeZone: 'Asia/Ho_Chi_Minh',
@@ -26,7 +37,10 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const [resolvedParams, locale] = await Promise.all([params, getRequestLocale()]);
+  const [resolvedParams, locale] = await Promise.all([
+    params,
+    getRequestLocale(),
+  ]);
   const article = await getPublishedArticle(resolvedParams.slug, locale);
   if (!article) return { title: 'Không tìm thấy bài viết — Nhịp vàng' };
   const url = `${siteUrl}/nhip-vang/${article.slug}`;
@@ -75,12 +89,19 @@ export default async function NhipVangArticlePage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const [resolvedParams, locale] = await Promise.all([params, getRequestLocale()]);
+  const [resolvedParams, locale] = await Promise.all([
+    params,
+    getRequestLocale(),
+  ]);
   const article = await getPublishedArticle(resolvedParams.slug, locale);
   if (!article) notFound();
   const english = locale === 'en';
   const related = (
-    await listPublishedArticles({ category: article.category, limit: 4, locale })
+    await listPublishedArticles({
+      category: article.category,
+      limit: 4,
+      locale,
+    })
   )
     .filter((item) => item.slug !== article.slug)
     .slice(0, 3);
@@ -112,7 +133,12 @@ export default async function NhipVangArticlePage({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: english ? 'Home' : 'Trang chủ', item: siteUrl },
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: english ? 'Home' : 'Trang chủ',
+        item: siteUrl,
+      },
       {
         '@type': 'ListItem',
         position: 2,
@@ -128,9 +154,23 @@ export default async function NhipVangArticlePage({
     ],
   };
   return (
-    <main id="main-content" tabIndex={-1} className="editorial-page" aria-labelledby="article-title">
-      <article className="editorial-article">
-        <nav className="editorial-breadcrumb" aria-label={english ? 'Breadcrumb' : 'Breadcrumb'}>
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="editorial-page"
+      aria-labelledby="article-title"
+    >
+      <article
+        className="editorial-article"
+        data-revision-id={article.revisionId}
+        data-content-sha256={createHash('sha256')
+          .update(article.contentMarkdown)
+          .digest('hex')}
+      >
+        <nav
+          className="editorial-breadcrumb"
+          aria-label={english ? 'Breadcrumb' : 'Breadcrumb'}
+        >
           <Link href="/">{english ? 'Home' : 'Trang chủ'}</Link>
           <span aria-hidden="true">/</span>
           <Link href="/nhip-vang">{english ? 'Gold Pulse' : 'Nhịp vàng'}</Link>
@@ -140,7 +180,9 @@ export default async function NhipVangArticlePage({
         <header className="mt-8">
           <p className="tool-eyebrow">
             <span aria-hidden="true" />
-            {english ? editorialCategoryLabel(article.category, 'en') : editorialCategoryLabels[article.category]}
+            {english
+              ? editorialCategoryLabel(article.category, 'en')
+              : editorialCategoryLabels[article.category]}
           </p>
           <h1
             id="article-title"
@@ -153,18 +195,26 @@ export default async function NhipVangArticlePage({
           </p>
           {english && article.translationStatus !== 'ready' ? (
             <p className="mt-3 rounded-xl border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-sm text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
-              This article is still being translated. The original Vietnamese version is shown below.
+              This article is still being translated. The original Vietnamese
+              version is shown below.
             </p>
           ) : null}
           <div className="editorial-article__meta mt-5">
-            <span>{english ? 'Author' : 'Tác giả'}: {article.authorName}</span>
+            <span>
+              {english ? 'Author' : 'Tác giả'}: {article.authorName}
+            </span>
             <time dateTime={article.publishedAt}>
-              {english ? 'Published' : 'Đăng'} {date(article.publishedAt, locale)}
+              {english ? 'Published' : 'Đăng'}{' '}
+              {date(article.publishedAt, locale)}
             </time>
             <time dateTime={article.updatedAt}>
-              {english ? 'Updated' : 'Cập nhật'} {date(article.updatedAt, locale)}
+              {english ? 'Updated' : 'Cập nhật'}{' '}
+              {date(article.updatedAt, locale)}
             </time>
-            <span>{Math.max(1, Math.ceil(wordCount / 220))} {english ? 'min read' : 'phút đọc'}</span>
+            <span>
+              {Math.max(1, Math.ceil(wordCount / 220))}{' '}
+              {english ? 'min read' : 'phút đọc'}
+            </span>
           </div>
         </header>
         <div className="editorial-article__hero">
@@ -176,7 +226,9 @@ export default async function NhipVangArticlePage({
             imageDisclosure={article.coverImageDisclosure}
           />
         </div>
-        <div lang={article.locale === 'en' ? 'en' : 'vi'}><ArticleBody article={article} /></div>
+        <div lang={article.locale === 'en' ? 'en' : 'vi'}>
+          <ArticleBody article={article} />
+        </div>
         {article.evidence.length ? (
           <section
             className="editorial-sources"
@@ -218,13 +270,17 @@ export default async function NhipVangArticlePage({
                   <a href={source.url} target="_blank" rel="noreferrer">
                     {source.title}
                   </a>
-                  {source.publishedAt ? ` · ${english ? 'published' : 'công bố'} ${source.publishedAt}` : ''}
+                  {source.publishedAt
+                    ? ` · ${english ? 'published' : 'công bố'} ${source.publishedAt}`
+                    : ''}
                 </li>
               ))}
             </ol>
           ) : (
             <p className="mt-3">
-              {english ? 'This article uses internal facts identified in its content. Verify original sources before making a financial decision.' : 'Bài này dùng dữ kiện nội bộ đã ghi rõ trong nội dung; cần đối chiếu nguồn gốc trước quyết định tài chính.'}
+              {english
+                ? 'This article uses internal facts identified in its content. Verify original sources before making a financial decision.'
+                : 'Bài này dùng dữ kiện nội bộ đã ghi rõ trong nội dung; cần đối chiếu nguồn gốc trước quyết định tài chính.'}
             </p>
           )}
         </section>

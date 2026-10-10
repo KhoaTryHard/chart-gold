@@ -1,5 +1,5 @@
 import 'server-only';
-import { marketFetch as fetch } from '@/lib/server/market-fetch';
+import { marketFetch as fetch, recordMarketAdapterFailure } from '@/lib/server/market-fetch';
 
 import {
   getMarketCompany,
@@ -208,7 +208,8 @@ export async function getVgjMarketData(
   let quote: VgjQuote;
   try {
     quote = await fetchVgjQuote(product as VgjProduct);
-  } catch {
+  } catch (error) {
+    recordMarketAdapterFailure(error);
     return unavailableMarketData(
       company,
       product,

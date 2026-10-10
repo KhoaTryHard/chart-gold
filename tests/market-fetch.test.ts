@@ -1,7 +1,61 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { marketFetch, withMarketFetch } from '@/lib/server/market-fetch';
+import { createMarketFetchDiagnostics, marketFetch, recordMarketAdapterFailure, withMarketFetch } from '@/lib/server/market-fetch';
 afterEach(() => vi.unstubAllGlobals());
 describe('public market request scheduling', () => {
+  it('counts origin network work, shared promises and cache hits separately', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"price":1}')));
+    const first = createMarketFetchDiagnostics();
+    await withMarketFetch(new AbortController().signal, 1, () => Promise.all([
+      marketFetch('https://diagnostics.example/shared?token=private'),
+      marketFetch('https://diagnostics.example/shared?token=private'),
+    ]), first);
+    expect(first).toMatchObject({ networkRequests: 1, deduplicatedRequests: 1, cacheHits: 0 });
+    const second = createMarketFetchDiagnostics();
+    await withMarketFetch(new AbortController().signal, 1, () => marketFetch('https://diagnostics.example/shared?token=private'), second);
+    expect(second).toMatchObject({ networkRequests: 0, deduplicatedRequests: 0, cacheHits: 1 });
+    expect(JSON.stringify([first, second])).not.toMatch(/token|private|diagnostics.example/);
+  });
+
+  it('categorizes upstream HTTP, timeout, cancellation and parser failures without raw messages', async () => {
+    const diagnostics = createMarketFetchDiagnostics();
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('private body', { status: 503 }))
+      .mockRejectedValueOnce(new DOMException('private timeout', 'TimeoutError'))
+      .mockRejectedValueOnce(new DOMException('private cancellation', 'AbortError')));
+    await withMarketFetch(new AbortController().signal, 1, async () => {
+      expect((await marketFetch('https://diagnostics-failure.example/http')).status).toBe(503);
+      for (const path of ['timeout', 'cancel']) {
+        try { await marketFetch(`https://diagnostics-failure.example/${path}`); }
+        catch (error) { recordMarketAdapterFailure(error); }
+      }
+      const parseError = new SyntaxError('private payload');
+      recordMarketAdapterFailure(parseError);
+      recordMarketAdapterFailure(parseError);
+      recordMarketAdapterFailure(new Error('private adapter failure'));
+    }, diagnostics);
+    expect(diagnostics).toMatchObject({
+      networkRequests: 3,
+      upstreamHttpErrors: { 503: 1 },
+      failures: { timeout: 1, cancelled: 1, invalid_payload: 1, adapter_error: 1 },
+    });
+    expect(JSON.stringify(diagnostics)).not.toMatch(/private|https:/);
+  });
+
+  it('isolates diagnostics between simultaneous requests', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('ok')));
+    const first = createMarketFetchDiagnostics();
+    const second = createMarketFetchDiagnostics();
+    await Promise.all([
+      withMarketFetch(new AbortController().signal, 1, () => marketFetch('https://diagnostics-isolation.example/a'), first),
+      withMarketFetch(new AbortController().signal, 1, async () => {
+        await marketFetch('https://diagnostics-isolation.example/b');
+        await marketFetch('https://diagnostics-isolation.example/c');
+      }, second),
+    ]);
+    expect(first.networkRequests).toBe(1);
+    expect(second.networkRequests).toBe(2);
+  });
+
   it('deduplicates a shared URL and caches public responses across requests', async () => {
     const fetcher = vi.fn(async () => new Response('{"price":1}'));
     vi.stubGlobal('fetch', fetcher);

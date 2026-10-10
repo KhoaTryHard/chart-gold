@@ -3,6 +3,7 @@ import {
   recentHistoryWindow,
   syncAnnualMarketHistory,
 } from '@/lib/server/market-history';
+import { logMarketEvent, marketFailureKind } from '@/lib/server/market-telemetry';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
       { status: 400, headers: { 'X-Content-Type-Options': 'nosniff' } },
     );
   }
+  const startedAt = performance.now();
   try {
     const conversationsDeleted = process.env.DATABASE_URL
       ? await (await import('@/lib/server/ai-conversations')).purgeExpiredConversations()
@@ -52,8 +54,25 @@ export async function GET(request: Request) {
     const summary = syncCompany
       ? await syncAnnualMarketHistory(start, end, syncCompany)
       : await syncAnnualMarketHistory(start, end);
+    const outcomes = Object.values(summary).map((item) => ({
+      companyId: item.companyId,
+      status: item.status,
+      okDays: item.okDays,
+      missingDays: item.missingDays,
+      errorDays: item.errorDays,
+    }));
+    logMarketEvent(
+      outcomes.some((item) => item.status === 'partial' || item.status === 'failed') ? 'warn' : 'info',
+      'market_history_sync',
+      { outcome: 'completed', start, end, outcomes, durationMs: Math.round(performance.now() - startedAt) },
+    );
     return Response.json({ start, end, summary, conversationsDeleted });
-  } catch {
+  } catch (error) {
+    logMarketEvent('error', 'market_history_sync', {
+      outcome: marketFailureKind(error),
+      start, end,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
     return Response.json(
       { error: 'Đồng bộ lịch sử không hoàn tất.' },
       { status: 503, headers: { 'X-Content-Type-Options': 'nosniff' } },

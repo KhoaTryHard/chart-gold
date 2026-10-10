@@ -3,6 +3,8 @@ import { LatestEditorialSection } from '@/components/editorial/editorial-section
 import { WorldGoldSection } from '@/components/market/world-gold-section';
 import { pageMetadata, siteUrl } from '@/lib/seo';
 
+export const revalidate = 300;
+
 export const metadata = pageMetadata(
   '/',
   'Giá vàng hôm nay, biểu đồ giá vàng Việt Nam',

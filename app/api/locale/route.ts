@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { isLocale, localeCookieName } from '@/lib/i18n';
+import { englishEnabled, isLocale, localeCookieName } from '@/lib/i18n';
 import { readJsonBody, RequestBodyTooLargeError } from '@/lib/server/body';
 import { isTrustedOrigin } from '@/lib/server/origin';
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       body && typeof body === 'object' && 'locale' in body
         ? (body as { locale?: unknown }).locale
         : undefined;
-    if (!isLocale(locale))
+    if (!isLocale(locale) || (!englishEnabled && locale === 'en'))
       return Response.json(
         { code: 'INVALID_LOCALE', error: 'Unsupported locale.' },
         { status: 400, headers: responseHeaders },

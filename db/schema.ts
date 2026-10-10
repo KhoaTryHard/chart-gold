@@ -71,12 +71,10 @@ export const marketHistorySyncRunStatusEnum = pgEnum(
   'market_history_sync_run_status',
   ['running', 'completed', 'partial', 'failed', 'skipped_locked'],
 );
-export const aiConversationTurnStatusEnum = pgEnum('ai_conversation_turn_status', [
-  'pending',
-  'completed',
-  'failed',
-  'aborted',
-]);
+export const aiConversationTurnStatusEnum = pgEnum(
+  'ai_conversation_turn_status',
+  ['pending', 'completed', 'failed', 'aborted'],
+);
 
 export const requestRateLimitBuckets = pgTable(
   'request_rate_limit_buckets',
@@ -202,12 +200,19 @@ export const aiConversations = pgTable(
     title: varchar('title', { length: 180 }).notNull(),
     version: integer('version').notNull().default(1),
     turnCount: integer('turn_count').notNull().default(0),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (table) => [
-    index('ai_conversations_user_updated_idx').on(table.userId, table.updatedAt),
+    index('ai_conversations_user_updated_idx').on(
+      table.userId,
+      table.updatedAt,
+    ),
     index('ai_conversations_expiry_idx').on(table.expiresAt),
   ],
 );
@@ -229,23 +234,39 @@ export const aiConversationTurns = pgTable(
     range: varchar('range', { length: 12 }).notNull(),
     goal: varchar('goal', { length: 24 }),
     analysisDepth: varchar('analysis_depth', { length: 24 }),
-    scenarioInputs: jsonb('scenario_inputs').$type<Record<string, unknown> | null>(),
+    scenarioInputs: jsonb('scenario_inputs').$type<Record<
+      string,
+      unknown
+    > | null>(),
     ledgerVersion: integer('ledger_version'),
     facts: jsonb('facts').$type<Record<string, unknown> | null>(),
     decision: jsonb('decision').$type<Record<string, unknown> | null>(),
     forecast: jsonb('forecast').$type<Record<string, unknown> | null>(),
     sources: jsonb('sources').$type<Array<Record<string, unknown>> | null>(),
-    citations: jsonb('citations').$type<Array<Record<string, unknown>> | null>(),
+    citations: jsonb('citations').$type<Array<
+      Record<string, unknown>
+    > | null>(),
     coverage: text('coverage'),
     warning: text('warning'),
     status: aiConversationTurnStatusEnum('status').notNull().default('pending'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('ai_conversation_turn_sequence_unique').on(table.conversationId, table.sequence),
-    uniqueIndex('ai_conversation_turn_request_unique').on(table.conversationId, table.clientRequestId),
-    index('ai_conversation_turn_conversation_idx').on(table.conversationId, table.sequence),
+    uniqueIndex('ai_conversation_turn_sequence_unique').on(
+      table.conversationId,
+      table.sequence,
+    ),
+    uniqueIndex('ai_conversation_turn_request_unique').on(
+      table.conversationId,
+      table.clientRequestId,
+    ),
+    index('ai_conversation_turn_conversation_idx').on(
+      table.conversationId,
+      table.sequence,
+    ),
   ],
 );
 
@@ -298,8 +319,14 @@ export const portfolioLedgerTransactions = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex('portfolio_ledger_transactions_pk').on(table.ledgerId, table.id),
-    index('portfolio_ledger_transactions_order_idx').on(table.ledgerId, table.sortOrder),
+    uniqueIndex('portfolio_ledger_transactions_pk').on(
+      table.ledgerId,
+      table.id,
+    ),
+    index('portfolio_ledger_transactions_order_idx').on(
+      table.ledgerId,
+      table.sortOrder,
+    ),
   ],
 );
 
@@ -315,7 +342,12 @@ export const portfolioLedgerMutations = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [index('portfolio_ledger_mutations_ledger_idx').on(table.ledgerId, table.createdAt)],
+  (table) => [
+    index('portfolio_ledger_mutations_ledger_idx').on(
+      table.ledgerId,
+      table.createdAt,
+    ),
+  ],
 );
 
 export const articles = pgTable(
@@ -479,6 +511,80 @@ export const articleRevisions = pgTable(
 );
 
 /** A localized rendering of one immutable editorial revision. */
+/** Immutable, externally reviewed article packages; not a Google-user approval. */
+export const editorialIntegrationPackages = pgTable(
+  'editorial_integration_packages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    clientId: varchar('client_id', { length: 80 }).notNull(),
+    rootId: varchar('root_id', { length: 80 }).notNull(),
+    draftId: varchar('draft_id', { length: 80 }).notNull(),
+    externalRevision: integer('external_revision').notNull(),
+    inputDigest: varchar('input_digest', { length: 64 }).notNull(),
+    reviewDigest: varchar('review_digest', { length: 64 }).notNull(),
+    reviewPackage: text('review_package').notNull(),
+    websiteVersion: varchar('website_version', { length: 64 }).notNull(),
+    articleId: uuid('article_id')
+      .notNull()
+      .references(() => articles.id),
+    revisionId: uuid('revision_id')
+      .notNull()
+      .references(() => articleRevisions.id),
+    imageSha256: varchar('image_sha256', { length: 64 }).notNull(),
+    state: varchar('state', { length: 32 }).notNull().default('prepared'),
+    approvalProvenance: jsonb('approval_provenance').$type<
+      Record<string, unknown>
+    >(),
+    receipt: jsonb('receipt').$type<Record<string, unknown>>(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('editorial_integration_client_draft_unique').on(
+      table.clientId,
+      table.draftId,
+    ),
+    uniqueIndex('editorial_integration_root_revision_unique').on(
+      table.clientId,
+      table.rootId,
+      table.externalRevision,
+    ),
+    uniqueIndex('editorial_integration_revision_unique').on(table.revisionId),
+    index('editorial_integration_root_idx').on(table.clientId, table.rootId),
+  ],
+);
+
+/** Scoped private MP4 uploads, immutable after server validation. */
+export const editorialVideoAssets = pgTable(
+  'editorial_video_assets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    clientId: varchar('client_id', { length: 80 }).notNull(),
+    rootId: varchar('root_id', { length: 80 }).notNull(),
+    draftId: varchar('draft_id', { length: 80 }).notNull(),
+    externalRevision: integer('external_revision').notNull(),
+    descriptor: jsonb('descriptor').$type<Record<string, unknown>>().notNull(),
+    descriptorDigest: varchar('descriptor_digest', { length: 64 }).notNull(),
+    pathname: text('pathname').notNull(),
+    blobUrl: text('blob_url'),
+    blobEtag: text('blob_etag'),
+    status: varchar('status', { length: 24 }).notNull().default('uploading'),
+    validatedAt: timestamp('validated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('editorial_video_client_draft_unique').on(table.clientId, table.draftId),
+    uniqueIndex('editorial_video_pathname_unique').on(table.pathname),
+    index('editorial_video_status_idx').on(table.status, table.createdAt),
+  ],
+);
+
 export const articleTranslations = pgTable(
   'article_translations',
   {

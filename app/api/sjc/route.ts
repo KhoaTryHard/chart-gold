@@ -1,14 +1,17 @@
 import { after } from 'next/server';
-import { getMarketData, type MarketDataView } from '@/lib/server/sjc';
+import { getMarketData, type MarketData, type MarketDataView } from '@/lib/server/sjc';
 import {
   isMarketCompanyId,
   isMarketProductId,
+  getMarketCompany,
 } from '@/lib/market-sources';
 import {
   getLatestMarketQuoteSnapshot,
   saveMarketQuoteSnapshot,
 } from '@/lib/server/market-snapshot';
-import { withMarketFetch } from '@/lib/server/market-fetch';
+import { createMarketFetchDiagnostics, withMarketFetch } from '@/lib/server/market-fetch';
+import { getMarketFreshness } from '@/lib/market-freshness';
+import { logMarketEvent, marketFailureKind } from '@/lib/server/market-telemetry';
 
 function scheduleAfterResponse(work: () => Promise<void>) {
   try {
@@ -32,14 +35,34 @@ export async function GET(request: Request) {
       { status: 400, headers: { 'X-Content-Type-Options': 'nosniff' } },
     );
   }
+  const startedAt = performance.now();
+  const diagnostics = createMarketFetchDiagnostics();
+  const identity = {
+    route: '/api/sjc',
+    companyId: company,
+    productId: product,
+    view,
+    provider: getMarketCompany(company).adapter,
+  };
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(view === 'quote' ? 8_000 : 25_000)]);
-  let market = await withMarketFetch(signal, historyDays ?? (view === 'history' ? 30 : 7), () => getMarketData(company, product, { view, historyDays }));
+  let market: MarketData;
+  try {
+    market = await withMarketFetch(signal, historyDays ?? (view === 'history' ? 30 : 7), () => getMarketData(company, product, { view, historyDays }), diagnostics);
+  } catch (error) {
+    logMarketEvent('error', 'market_origin', {
+      ...identity,
+      outcome: marketFailureKind(error),
+      durationMs: Math.round(performance.now() - startedAt),
+      ...diagnostics,
+    });
+    // Next logs uncaught errors too; do not forward upstream text to that logger.
+    throw new Error('Market data request failed');
+  }
   if (market.mode === 'live' && view !== 'history') {
     scheduleAfterResponse(() => saveMarketQuoteSnapshot(market).catch((error) =>
-      console.error(
-        '[market-snapshot] save failed',
-        error instanceof Error ? error.message : typeof error,
-      ),
+      logMarketEvent('error', 'market_snapshot', {
+        ...identity, operation: 'save', outcome: marketFailureKind(error),
+      }),
     ));
   } else if (view !== 'history' && market.availability === 'unavailable') {
     try {
@@ -54,15 +77,16 @@ export async function GET(request: Request) {
         };
       }
     } catch (error) {
-      console.error(
-        '[market-snapshot] read failed',
-        error instanceof Error ? error.message : typeof error,
-      );
+      logMarketEvent('error', 'market_snapshot', {
+        ...identity, operation: 'read', outcome: marketFailureKind(error),
+      });
     }
   }
-  const fetchedAt = market.generatedAt;
+  const fetchedAt = market.fetchedAt ?? market.generatedAt;
+  const freshness = getMarketFreshness(market);
+  const fetchedAtMs = Date.parse(fetchedAt);
   const expiresAt = new Date(
-    new Date(fetchedAt).getTime() + 240_000,
+    (Number.isFinite(fetchedAtMs) ? fetchedAtMs : Date.parse(freshness.evaluatedAt)) + 240_000,
   ).toISOString();
   const cacheControl =
     view === 'history'
@@ -70,6 +94,21 @@ export async function GET(request: Request) {
       : market.mode === 'live'
       ? 'public, max-age=60, s-maxage=240, stale-while-revalidate=60'
       : 'public, max-age=15, s-maxage=30, stale-while-revalidate=30';
+  // One origin execution; CDN hits never execute this handler or emit this log.
+  logMarketEvent(
+    market.mode === 'fallback' || market.availability === 'unavailable' ? 'warn' : 'info',
+    'market_origin',
+    {
+      ...identity,
+      productId: market.product.id,
+      mode: market.mode,
+      availability: market.availability,
+      officialSource: market.source.official === true,
+      durationMs: Math.round(performance.now() - startedAt),
+      ...freshness,
+      ...diagnostics,
+    },
+  );
   return Response.json({
     ...market,
     view,
@@ -77,6 +116,7 @@ export async function GET(request: Request) {
     fetchedAt,
     expiresAt,
     stale: market.mode !== 'live',
+    freshness,
   }, {
     // A known company with no upstream quote is a valid response. The client
     // uses `availability` to render an explicit unavailable state rather than

@@ -47,6 +47,7 @@ type DonationSummary = {
 };
 
 const presets = [20_000, 50_000, 100_000];
+const PUBLIC_POLL_MS = 25_000;
 const subscribeToHydration = () => () => {};
 const getHydratedSnapshot = () => true;
 const getServerHydratedSnapshot = () => false;
@@ -91,6 +92,7 @@ export function DonationPanel() {
   const [notice, setNotice] = useState('');
   const [statusError, setStatusError] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [publicRefreshVersion, setPublicRefreshVersion] = useState(0);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [leaderboardError, setLeaderboardError] = useState(false);
   const leaderboardAbortRef = useRef<AbortController | null>(null);
@@ -112,35 +114,6 @@ export function DonationPanel() {
     const totalSeconds = Math.ceil(value / 1_000);
     return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    let inFlight = false;
-    const refresh = async () => {
-      if (cancelled || inFlight || document.visibilityState === 'hidden') return;
-      inFlight = true;
-      try {
-        const response = await fetch('/api/donations/summary', {
-          cache: 'no-store', signal: AbortSignal.timeout(10_000),
-        });
-        const body = (await response.json()) as { summary?: DonationSummary | null };
-        if (!cancelled && response.ok) setSummary(body.summary ?? null);
-      } catch {
-        // Keep the last confirmed totals while the next refresh retries.
-      } finally {
-        inFlight = false;
-      }
-    };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 3_000);
-    const onVisible = () => void refresh();
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [orderStatus, previousOrder?.status, refreshVersion]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -179,24 +152,43 @@ export function DonationPanel() {
   useEffect(() => {
     if (order) return;
     let cancelled = false;
+    let inFlight = false;
+    const controller = new AbortController();
     const savedId = window.localStorage.getItem('kim-tuyen-donation-order');
     const savedToken = window.localStorage.getItem(
       'kim-tuyen-donation-access-token',
     );
     if (!savedId) return;
-    void fetch(`/api/donations/orders/${savedId}`, {
-      cache: 'no-store',
-      headers: savedToken ? { 'X-Donation-Token': savedToken } : undefined,
-    })
-      .then(async (response) => {
+    const restoreOrder = async () => {
+      if (cancelled || inFlight || document.visibilityState === 'hidden' || !navigator.onLine) return;
+      inFlight = true;
+      try {
+        const response = await fetch(`/api/donations/orders/${savedId}`, {
+          cache: 'no-store',
+          headers: savedToken ? { 'X-Donation-Token': savedToken } : undefined,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+        });
         const body = (await response.json()) as { order?: DonationOrder };
         if (!cancelled && response.ok && body.order)
           setOrder((current) => current ?? {
             ...body.order!, accessToken: body.order!.accessToken ?? savedToken,
           });
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
+      } catch {
+        // Retry saved orders when the connection or visible tab returns.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const resume = () => void restoreOrder();
+    void restoreOrder();
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
   }, [order]);
 
   useEffect(() => {
@@ -216,8 +208,8 @@ export function DonationPanel() {
     if (periodChanged || !leaderboardHasRowsRef.current)
       setLeaderboardLoading(true);
 
-    const refreshLeaderboard = async () => {
-      if (cancelled || inFlight || document.visibilityState === 'hidden') return;
+    const refreshPublicData = async () => {
+      if (cancelled || inFlight || document.visibilityState === 'hidden' || !navigator.onLine) return;
       inFlight = true;
       leaderboardAbortRef.current?.abort();
       const controller = new AbortController();
@@ -225,13 +217,14 @@ export function DonationPanel() {
       const requestId = ++leaderboardRequestRef.current;
       try {
         const response = await fetch(
-          `/api/donations/leaderboard?period=${leaderboardPeriod}`,
+          `/api/donations/public?period=${leaderboardPeriod}`,
           { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) },
         );
-        const body = (await response.json()) as { rows?: LeaderboardRow[] };
+        const body = (await response.json()) as { summary?: DonationSummary | null; rows?: LeaderboardRow[] };
         if (!response.ok) throw new Error('leaderboard_unavailable');
         if (cancelled || requestId !== leaderboardRequestRef.current) return;
         setLeaderboard(body.rows ?? []);
+        setSummary(body.summary ?? null);
         leaderboardHasRowsRef.current = Boolean(body.rows?.length);
         setLeaderboardError(false);
       } catch (error) {
@@ -249,19 +242,21 @@ export function DonationPanel() {
       }
     };
 
-    void refreshLeaderboard();
-    const interval = window.setInterval(() => void refreshLeaderboard(), 3_000);
+    void refreshPublicData();
+    const interval = window.setInterval(() => void refreshPublicData(), PUBLIC_POLL_MS);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refreshLeaderboard();
+      if (document.visibilityState === 'visible') void refreshPublicData();
     };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onVisible);
       leaderboardAbortRef.current?.abort();
     };
-  }, [leaderboardPeriod, order?.status, previousOrder?.status, refreshVersion]);
+  }, [leaderboardPeriod, orderStatus, previousOrder?.status, publicRefreshVersion]);
 
   useEffect(() => {
     // The bank's transaction time determines acceptance. A webhook can arrive
@@ -277,11 +272,15 @@ export function DonationPanel() {
     let cancelled = false;
     let inFlight = false;
     const controller = new AbortController();
-    const checkStatus = async () => {
-      if (cancelled || inFlight || document.visibilityState === 'hidden') return;
+    const nextCheckAt = new Map<string, number>();
+    const checkStatus = async (force = false) => {
+      if (cancelled || inFlight || document.visibilityState === 'hidden' || !navigator.onLine) return;
       inFlight = true;
       try {
         for (const pendingId of pollableIds) {
+          if (!force && (nextCheckAt.get(pendingId) ?? 0) > Date.now()) continue;
+          const status = pendingId === orderId ? orderStatus : previousOrder?.status;
+          nextCheckAt.set(pendingId, Date.now() + (status === 'expired' ? 30_000 : 3_000));
           const tokenKey =
             pendingId === orderId
               ? 'kim-tuyen-donation-access-token'
@@ -330,14 +329,16 @@ export function DonationPanel() {
       .every((status) => status === 'expired');
     const interval = window.setInterval(() => void checkStatus(), onlyExpired ? 30_000 : 3_000);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void checkStatus();
+      if (document.visibilityState === 'visible') void checkStatus(true);
     };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onVisible);
     return () => {
       cancelled = true;
       controller.abort();
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onVisible);
     };
   }, [english, orderId, orderStatus, previousOrder?.id, previousOrder?.status, refreshVersion]);
 
@@ -427,6 +428,7 @@ export function DonationPanel() {
       setEditingName(false);
       setDisplayName(body.order.displayName ?? '');
       setIsAnonymous(body.order.isAnonymous);
+      setPublicRefreshVersion((version) => version + 1);
       setNotice(english ? 'Display details were saved to this order.' : 'Đã lưu thông tin hiển thị trên đơn hiện tại.');
     } catch (error) {
       setNotice(

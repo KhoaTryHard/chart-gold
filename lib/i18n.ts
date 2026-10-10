@@ -5,12 +5,19 @@ export type Locale = (typeof supportedLocales)[number];
 export const defaultLocale: Locale = 'vi';
 export const localeCookieName = 'kim-tuyen-locale';
 
+// Temporarily serve the website in Vietnamese; re-enable without removing translations.
+export const englishEnabled = false;
+
 export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && supportedLocales.includes(value as Locale);
 }
 
 export function localeFromValue(value: unknown): Locale {
   return isLocale(value) ? value : defaultLocale;
+}
+
+export function interfaceLocaleFromValue(value: unknown): Locale {
+  return englishEnabled ? localeFromValue(value) : defaultLocale;
 }
 
 export function localeFromCookieHeader(value: string | null | undefined): Locale {

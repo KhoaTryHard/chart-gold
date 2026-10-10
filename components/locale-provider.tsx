@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { htmlLang, type Locale } from '@/lib/i18n';
+import { englishEnabled, htmlLang, interfaceLocaleFromValue, type Locale } from '@/lib/i18n';
 
 type LocaleContextValue = {
   locale: Locale;
@@ -97,7 +97,7 @@ export function LocaleProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [locale, setLocaleState] = useState(initialLocale);
+  const [locale, setLocaleState] = useState(() => interfaceLocaleFromValue(initialLocale));
   const [isChangingLocale, setIsChangingLocale] = useState(false);
   const [localeError, setLocaleError] = useState<string | null>(null);
 
@@ -125,6 +125,7 @@ export function LocaleProvider({
 
   const setLocale = useCallback(
     async (nextLocale: Locale) => {
+      if (!englishEnabled && nextLocale === 'en') return;
       if (nextLocale === locale || isChangingLocale) return;
       const previousLocale = locale;
       setLocaleError(null);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isTrustedOrigin } from '@/lib/server/origin';
 
 import {
   BillingError,
@@ -28,16 +29,6 @@ const updateSchema = z
       });
   });
 
-function sameOrigin(request: Request) {
-  try {
-    const origin = request.headers.get('origin');
-    return Boolean(
-      origin && new URL(origin).origin === new URL(request.url).origin,
-    );
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(
   _request: Request,
@@ -78,7 +69,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!sameOrigin(request))
+  if (!isTrustedOrigin(request))
     return Response.json({ error: 'Yêu cầu không hợp lệ.' }, { status: 403 });
   try {
     const { id } = await context.params;

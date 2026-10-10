@@ -24,6 +24,7 @@ type DonationOrder = {
 };
 
 let nextSepayId = Date.now() * 1_000;
+let nextDonorAddress = 1;
 
 function uniqueSepayId() {
   nextSepayId += 1;
@@ -55,6 +56,9 @@ async function createOrder(
     headers: {
       origin: baseURL,
       'content-type': 'application/json',
+      // Model independent donors instead of exhausting one browser's quota
+      // while creating all contract fixtures in a few seconds.
+      'x-forwarded-for': `192.0.2.${nextDonorAddress++}`,
     },
   });
   expect(response.status()).toBe(200);
@@ -63,11 +67,15 @@ async function createOrder(
   return body.order;
 }
 
+function bankTime(epoch = Date.now()) {
+  return new Date(epoch + 7 * 60 * 60 * 1_000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function webhookPayload(order: DonationOrder, overrides: Record<string, unknown> = {}) {
   return {
     id: uniqueSepayId(),
     gateway: bankCode,
-    transactionDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    transactionDate: bankTime(),
     accountNumber,
     code: order.orderCode,
     transferType: 'in',
@@ -94,6 +102,16 @@ test.describe('DONATE production contract against isolated PostgreSQL', () => {
     'Set E2E_DATABASE_URL to run donate E2E against an isolated PostgreSQL database.',
   );
   test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async () => {
+    const database = new URL(e2eDatabaseUrl!);
+    if (!['127.0.0.1', 'localhost'].includes(database.hostname) || !/test/i.test(database.pathname))
+      throw new Error('Rate-limit fixture reset requires a local test database.');
+    const pool = new Pool({ connectionString: e2eDatabaseUrl });
+    try {
+      await pool.query("delete from request_rate_limit_buckets where key like 'donation-order-%'");
+    } finally { await pool.end(); }
+  });
 
   test('creates a QR, protects the order with its token, and restores it after reload', async ({
     page,
@@ -186,7 +204,7 @@ test.describe('DONATE production contract against isolated PostgreSQL', () => {
         {
           status: 'paid',
           paid: true,
-          sepay_transaction_id: sepayId,
+          sepay_transaction_id: String(sepayId),
           transaction_status: 'accepted',
           donation_order_id: orderId,
         },
@@ -233,12 +251,14 @@ test.describe('DONATE production contract against isolated PostgreSQL', () => {
 
       const beforeExpiry = await createOrder(request, 11_000);
       orderIds.push(beforeExpiry.id);
+      await pool.query('update donation_orders set expires_at = now() - interval \'30 seconds\' where id = $1', [beforeExpiry.id]);
+      const lateOrder = await request.get(`/api/donations/orders/${beforeExpiry.id}`, {
+        headers: { 'x-donation-token': beforeExpiry.accessToken! },
+      });
+      expect((await lateOrder.json()).order.status).toBe('expired');
       const beforePayload = webhookPayload(beforeExpiry, {
         id: uniqueSepayId(),
-        transactionDate: new Date(Date.now() - 60_000)
-          .toISOString()
-          .slice(0, 19)
-          .replace('T', ' '),
+        transactionDate: bankTime(Date.now() - 60_000),
       });
       sepayIds.push(Number(beforePayload.id));
       const beforeResponse = await sendWebhook(request, beforePayload);
@@ -255,6 +275,10 @@ test.describe('DONATE production contract against isolated PostgreSQL', () => {
         `update donation_orders set expires_at = now() - interval '1 minute' where id = $1`,
         [afterExpiry.id],
       );
+      const afterExpired = await request.get(`/api/donations/orders/${afterExpiry.id}`, {
+        headers: { 'x-donation-token': afterExpiry.accessToken! },
+      });
+      expect((await afterExpired.json()).order.status).toBe('expired');
       const afterPayload = webhookPayload(afterExpiry, {
         id: uniqueSepayId(),
       });

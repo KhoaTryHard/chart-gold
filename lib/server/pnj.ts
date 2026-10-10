@@ -3,6 +3,7 @@ import {
   marketFetch as fetch,
   marketHistoryDays,
   isAnalysisFetch,
+  recordMarketAdapterFailure,
 } from '@/lib/server/market-fetch';
 
 import type { MarketData, MarketDataOptions, PricePoint } from '@/lib/server/sjc';
@@ -319,9 +320,11 @@ async function fetchPnjHistory(
       return point;
     }),
   );
-  return responses.flatMap((result) =>
-    result.status === 'fulfilled' ? [result.value] : [],
-  );
+  return responses.flatMap((result) => {
+    if (result.status === 'fulfilled') return [result.value];
+    recordMarketAdapterFailure(result.reason);
+    return [];
+  });
 }
 
 function unavailableMarketData(
@@ -362,7 +365,8 @@ async function loadPnjMarketData(
   if (view !== 'history') {
     try {
       quote = await fetchPnjCurrentQuote(product);
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
     // Keep trying the official history endpoint if only the live snapshot is
     // temporarily unavailable.
     }
@@ -372,7 +376,8 @@ async function loadPnjMarketData(
   if (view !== 'quote') {
     try {
       history = await fetchPnjHistory(product, company.maxHistoryDays, options.historyDays);
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
     // A live quote remains useful when a date-specific history request fails.
     }
   }

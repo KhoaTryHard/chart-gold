@@ -1,8 +1,21 @@
 import { z } from 'zod';
+import { waitUntil } from '@vercel/functions';
+import {
+  getAdminInbox,
+  getAdminRevision,
+  listAdminJobSummaries,
+  toReviewSummary,
+} from '@/lib/editorial/admin-read';
+import {
+  approveEditorialRevisions,
+  scheduleEditorialRevision,
+  changeEditorialSlot,
+} from '@/lib/editorial/admin';
+import { EditorialStateError } from '@/lib/editorial/review';
+import { revalidateEditorialPublicContent } from '@/lib/editorial/public-cache';
 import {
   approveAndScheduleRevisions,
   createArticleDraft,
-  ensurePublicationSlots,
   listAdminArticles,
   listEditorialJobs,
   listPublicationSlots,
@@ -36,20 +49,46 @@ import {
 import { isTrustedOrigin } from '@/lib/server/origin';
 import { readJsonBody } from '@/lib/server/body';
 import { vietnamLocalDate } from '@/lib/editorial/time';
-import { articleTranslations } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { articles, articleTranslations } from '@/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { getDatabase } from '@/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 90;
 
 const category = z.enum(['news', 'explain', 'practice']);
 const approval = z.object({
   articleId: z.uuid(),
   revisionId: z.uuid(),
   slot: z.enum(['morning', 'noon', 'evening']),
+  version: z.string().length(64).optional(),
+});
+const target = z.object({
+  articleId: z.uuid(),
+  revisionId: z.uuid(),
+  version: z.string().length(64),
 });
 const mutation = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('approve'),
+    targets: z.array(target).min(1).max(20),
+  }),
+  target.extend({
+    action: z.literal('schedule'),
+    date: z.iso.date(),
+    slot: z.enum(['morning', 'noon', 'evening']),
+  }),
+  target.extend({
+    action: z.literal('unschedule'),
+    date: z.iso.date(),
+    slot: z.enum(['morning', 'noon', 'evening']),
+  }),
+  z.object({
+    action: z.literal('reopen_slot'),
+    date: z.iso.date(),
+    slot: z.enum(['morning', 'noon', 'evening']),
+  }),
   z.object({
     action: z.literal('create'),
     title: z.string().trim().min(5).max(180),
@@ -74,6 +113,7 @@ const mutation = z.discriminatedUnion('action', [
     action: z.literal('request_changes'),
     articleId: z.uuid(),
     revisionId: z.uuid(),
+    version: z.string().length(64),
     note: z.string().trim().min(3).max(2_000),
   }),
   z.object({
@@ -85,8 +125,10 @@ const mutation = z.discriminatedUnion('action', [
     action: z.literal('restore'),
     articleId: z.uuid(),
     revisionId: z.uuid(),
+    currentRevisionId: z.uuid(),
+    version: z.string().length(64),
   }),
-  z.object({ action: z.literal('unpublish'), articleId: z.uuid() }),
+  target.extend({ action: z.literal('unpublish') }),
   z.object({ action: z.literal('translate'), revisionId: z.uuid() }),
   z.object({ action: z.literal('hide_translation'), revisionId: z.uuid() }),
   z.object({ action: z.literal('setup_automation') }),
@@ -94,6 +136,8 @@ const mutation = z.discriminatedUnion('action', [
 ]);
 
 function errorResponse(error: unknown) {
+  if (error instanceof EditorialStateError)
+    return Response.json({ error: error.message }, { status: error.status });
   if (error instanceof EditorialAuthError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
@@ -106,11 +150,52 @@ function errorResponse(error: unknown) {
   );
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     await requireEditorialAdmin();
+    const params = new URL(
+      request?.url ?? 'http://localhost/api/admin/articles',
+    ).searchParams;
+    const mode = params.get('mode');
+    if (mode === 'operations') {
+      const [jobs, budget] = await Promise.all([
+        listAdminJobSummaries(),
+        readEditorialBudget(),
+      ]);
+      return Response.json(
+        {
+          jobs,
+          budget,
+          automation: editorialAutomationStatus(),
+          providers: getEditorialProviderAvailability(),
+          imageProvider: getEditorialImageAvailability(),
+          brandCovers: listBrandCovers(),
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    if (mode !== 'legacy') {
+      const parsed = z
+        .object({
+          group: z
+            .enum(['pending', 'approved', 'scheduled', 'attention'])
+            .optional(),
+          category: category.optional(),
+          search: z.string().max(180).optional(),
+          page: z.coerce.number().int().min(1).max(100_000).default(1),
+          date: z.iso.date().optional(),
+        })
+        .safeParse(Object.fromEntries(params));
+      if (!parsed.success)
+        return Response.json(
+          { error: 'Bộ lọc không hợp lệ.' },
+          { status: 400 },
+        );
+      return Response.json(await getAdminInbox(parsed.data), {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
     const localDate = vietnamLocalDate();
-    await ensurePublicationSlots(localDate);
     const [articles, jobs, budget, slots] = await Promise.all([
       listAdminArticles(),
       listEditorialJobs(),
@@ -150,6 +235,61 @@ export async function POST(request: Request) {
       );
     }
     const action = parsed.data;
+    if (action.action === 'approve') {
+      const results = await approveEditorialRevisions(action.targets, admin.id);
+      const successfulIds = results
+        .filter((result) => result.ok)
+        .map((result) => result.articleId);
+      const affectedArticles = successfulIds.length
+        ? await getDatabase()
+            .select()
+            .from(articles)
+            .where(inArray(articles.id, successfulIds))
+        : [];
+      return Response.json({
+        results: results.map((result) => {
+          if (!result.ok) return result;
+          return {
+            articleId: result.articleId,
+            revisionId: result.revisionId,
+            version: result.version,
+            ok: true,
+            item: toReviewSummary(
+              affectedArticles.find(
+                (article) => article.id === result.articleId,
+              )!,
+              result.revision,
+            ),
+          };
+        }),
+      });
+    }
+    if (action.action === 'schedule') {
+      const slot = await scheduleEditorialRevision(
+        { ...action, localDate: action.date },
+        admin.id,
+      );
+      return Response.json({
+        slot,
+        item: await getAdminRevision(action.articleId, action.revisionId),
+      });
+    }
+    if (action.action === 'unschedule' || action.action === 'reopen_slot') {
+      const slot = await changeEditorialSlot(
+        action.date,
+        action.slot,
+        action.action === 'unschedule' ? 'unschedule' : 'reopen',
+        action.action === 'unschedule' ? action : undefined,
+      );
+      return Response.json({
+        slot,
+        ...(action.action === 'unschedule'
+          ? {
+              item: await getAdminRevision(action.articleId, action.revisionId),
+            }
+          : {}),
+      });
+    }
     if (action.action === 'create') {
       const result = await createArticleDraft({
         ...action,
@@ -157,7 +297,13 @@ export async function POST(request: Request) {
         evidence: validateEvidence(action.evidence),
         createdByUserId: admin.id,
       });
-      return Response.json(result, { status: 201 });
+      return Response.json(
+        {
+          ...result,
+          item: await getAdminRevision(result.article.id, result.revision.id),
+        },
+        { status: 201 },
+      );
     }
     if (action.action === 'generate') {
       const job = await createManualEditorialJob({
@@ -172,10 +318,9 @@ export async function POST(request: Request) {
         );
       }
       const automation = editorialAutomationStatus();
-      const outcome =
-        automation.enabled && automation.configured
-          ? null
-          : await runEditorialGenerationJob(job.id);
+      if (!automation.enabled || !automation.configured)
+        waitUntil(runEditorialGenerationJob(job.id));
+      const outcome = null;
       return Response.json(
         {
           job,
@@ -184,7 +329,7 @@ export async function POST(request: Request) {
           message:
             automation.enabled && automation.configured
               ? 'Đã đưa yêu cầu vào hàng đợi biên tập.'
-              : 'Đã tạo bản nháp theo chế độ chạy thủ công. Cần bật QStash để tự động hóa hằng ngày.',
+              : 'Đã nhận yêu cầu tạo nháp. Bạn có thể tiếp tục duyệt các bài khác.',
         },
         { status: 202 },
       );
@@ -201,6 +346,7 @@ export async function POST(request: Request) {
       const revision = await requestRevisionChanges({
         articleId: action.articleId,
         revisionId: action.revisionId,
+        version: action.version,
         reviewNote: action.note,
         reviewerId: admin.id,
       });
@@ -210,11 +356,14 @@ export async function POST(request: Request) {
         reviewNote: action.note,
       });
       const automation = editorialAutomationStatus();
-      const outcome =
-        job && (!automation.enabled || !automation.configured)
-          ? await runEditorialGenerationJob(job.id)
-          : null;
-      return Response.json({ revision, job, outcome });
+      if (job && (!automation.enabled || !automation.configured))
+        waitUntil(runEditorialGenerationJob(job.id));
+      const outcome = null;
+      return Response.json({
+        item: await getAdminRevision(action.articleId, revision.id),
+        job,
+        outcome,
+      });
     }
     if (action.action === 'skip_slot') {
       return Response.json({
@@ -225,20 +374,20 @@ export async function POST(request: Request) {
       });
     }
     if (action.action === 'restore') {
+      const revision = await restoreArticleRevision(
+        action.articleId,
+        action.revisionId,
+        admin.id,
+        { revisionId: action.currentRevisionId, version: action.version },
+      );
       return Response.json(
-        {
-          revision: await restoreArticleRevision(
-            action.articleId,
-            action.revisionId,
-            admin.id,
-          ),
-        },
+        { item: await getAdminRevision(action.articleId, revision.id) },
         { status: 201 },
       );
     }
     if (action.action === 'unpublish') {
       return Response.json({
-        article: await unpublishArticle(action.articleId),
+        article: await unpublishArticle(action.articleId, action),
       });
     }
     if (action.action === 'translate') {
@@ -258,6 +407,7 @@ export async function POST(request: Request) {
           ),
         )
         .returning();
+      if (translation) revalidateEditorialPublicContent();
       return Response.json({ translation: translation ?? null });
     }
     if (action.action === 'setup_automation') {

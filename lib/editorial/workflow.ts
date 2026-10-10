@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
-import { revalidatePath } from 'next/cache';
-import { and, desc, eq, inArray, isNull, lte, or } from 'drizzle-orm';
+import { createHash, randomUUID } from 'node:crypto';
+import { revalidateEditorialPublicContent } from './public-cache';
+import { and, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { getDatabase, withDatabaseAdvisoryLock } from '@/db';
 import {
   articleRevisions,
@@ -21,6 +21,7 @@ import {
   ensurePublicationSlots,
   publishDueSlot,
   validateEditorialSources,
+  lockEditorialArticle,
 } from './admin';
 import {
   estimateEditorialTextActualVnd,
@@ -33,6 +34,8 @@ import {
   EditorialGenerationError,
   generateEditorialDraft,
   generateEditorialTranslation,
+  type EditorialAttemptObserver,
+  type GeneratedDraft,
 } from './generation';
 import { enqueueEditorialWorker, editorialAutomationStatus } from './qstash';
 import {
@@ -41,6 +44,7 @@ import {
   selectDailyEditorialTopics,
   type ScoutedItem,
 } from './scouting';
+import { EditorialStateError, revisionVersion } from './review';
 import { vietnamLocalDate } from './time';
 import type {
   EditorialCategory,
@@ -60,6 +64,8 @@ type JobPayload = {
   articleIdToRevise?: string;
   revisionIdToRevise?: string;
   reviewNote?: string;
+  baseMarkdown?: string;
+  baseRevisionVersion?: string;
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -103,6 +109,14 @@ function jobPayload(value: unknown): JobPayload {
       typeof candidate.reviewNote === 'string'
         ? candidate.reviewNote
         : undefined,
+    baseMarkdown:
+      typeof candidate.baseMarkdown === 'string'
+        ? candidate.baseMarkdown.slice(0, 40_000)
+        : undefined,
+    baseRevisionVersion:
+      typeof candidate.baseRevisionVersion === 'string'
+        ? candidate.baseRevisionVersion
+        : undefined,
   };
 }
 
@@ -119,7 +133,14 @@ function editorialPromptCharacters(topic: string, payload: JobPayload) {
       (item.sourceUrl?.length ?? 0),
     0,
   );
-  return topic.length + sources + evidence + 1_500;
+  return (
+    topic.length +
+    sources +
+    evidence +
+    (payload.reviewNote?.length ?? 0) +
+    (payload.baseMarkdown?.length ?? 0) +
+    1_500
+  );
 }
 
 function hash(value: string) {
@@ -320,6 +341,10 @@ export async function createEditorialRewriteJob(input: {
     )
     .limit(1);
   if (!revision) throw new Error('Không tìm thấy phiên bản cần AI sửa.');
+  if (revision.reviewNote !== input.reviewNote.trim().slice(0, 2_000))
+    throw new EditorialStateError(
+      'Góp ý đã thay đổi; hãy mở lại phiên bản mới.',
+    );
   const topic = `Viết lại bài “${revision.title}”. Góp ý bắt buộc của biên tập viên: ${input.reviewNote.trim().slice(0, 2_000)}. Giữ các nguồn và dữ kiện đã có, sửa nội dung để đáp ứng góp ý; không bịa thêm dữ kiện.`;
   const job = await createQueuedJob({
     topic,
@@ -335,6 +360,8 @@ export async function createEditorialRewriteJob(input: {
       articleIdToRevise: input.articleId,
       revisionIdToRevise: input.revisionId,
       reviewNote: input.reviewNote,
+      baseMarkdown: revision.contentMarkdown,
+      baseRevisionVersion: revisionVersion(revision),
     },
   });
   if (job) await enqueueIfConfigured(job.id);
@@ -458,161 +485,265 @@ export async function collectDailyEditorialWork(
   return result ?? { status: 'locked' as const, localDate };
 }
 
-async function recordGenerationAttempts(
-  jobId: string,
-  attempts: readonly {
-    provider: string;
-    model: string | null;
-    status: string;
-    retryable: boolean;
-    statusCode: number | null;
-    retryAfterMs: number | null;
-    inputTokens: number | null;
-    outputTokens: number | null;
-    errorMessage?: string;
-  }[],
-  stage: 'generate' | 'translate' = 'generate',
-) {
-  if (!attempts.length) return [];
-  return getDatabase()
-    .insert(editorialJobAttempts)
-    .values(
-      attempts.map((attempt, index) => ({
-        jobId,
-        attemptNumber: index + 1,
-        stage,
-        provider: attempt.provider,
-        model: attempt.model,
-        status:
-          attempt.status === 'succeeded'
-            ? 'succeeded'
-            : attempt.status === 'skipped'
-              ? 'cancelled'
-              : 'failed',
-        retryable: attempt.retryable,
-        httpStatus: attempt.statusCode,
-        retryAfterMs: attempt.retryAfterMs,
-        inputTokens: attempt.inputTokens,
-        outputTokens: attempt.outputTokens,
-        errorMessage: attempt.errorMessage ?? null,
-        completedAt: new Date(),
-      })),
-    )
-    .onConflictDoNothing();
+function attemptObserver(jobId: string, stage: 'generate' | 'translate') {
+  let id: string | undefined;
+  let dispatched = false;
+  const observe: EditorialAttemptObserver = async ({ phase, attempt }) => {
+    if (phase === 'started') {
+      const row = await getDatabase().transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${'editorial:attempt:' + jobId}))`,
+        );
+        const [number] = await tx
+          .select({
+            value: sql<number>`coalesce(max(${editorialJobAttempts.attemptNumber}), 0) + 1`,
+          })
+          .from(editorialJobAttempts)
+          .where(eq(editorialJobAttempts.jobId, jobId));
+        const [created] = await tx
+          .insert(editorialJobAttempts)
+          .values({
+            jobId,
+            stage,
+            attemptNumber: Number(number.value),
+            provider: attempt.provider,
+            model: attempt.model,
+            status: 'running',
+          })
+          .returning();
+        return created;
+      });
+      id = row.id;
+      dispatched = true;
+    } else if (id) {
+      await getDatabase()
+        .update(editorialJobAttempts)
+        .set({
+          status: attempt.status === 'succeeded' ? 'succeeded' : 'failed',
+          retryable: attempt.retryable,
+          httpStatus: attempt.statusCode,
+          retryAfterMs: attempt.retryAfterMs,
+          inputTokens: attempt.inputTokens,
+          outputTokens: attempt.outputTokens,
+          errorMessage: attempt.errorMessage ?? null,
+          completedAt: new Date(),
+        })
+        .where(eq(editorialJobAttempts.id, id));
+      id = undefined;
+    }
+  };
+  return { observe, contacted: () => dispatched };
 }
 
-export async function runEditorialGenerationJob(jobId: string) {
+async function runEditorialGenerationJobLocked(jobId: string) {
   const db = getDatabase();
-  const [job] = await db
-    .select()
-    .from(editorialJobs)
-    .where(eq(editorialJobs.id, jobId))
-    .limit(1);
-  if (!job) throw new Error('Không tìm thấy tác vụ biên tập.');
-  if (job.status === 'completed') return { status: 'completed' as const, job };
-  if (job.stage !== 'generate')
-    return { status: 'skipped' as const, reason: 'wrong-stage' };
-  if (job.attemptCount >= job.maxAttempts) {
-    return { status: 'skipped' as const, reason: 'max-attempts' };
+  const token = randomUUID();
+  const claimed = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${'editorial:job:' + jobId}))`,
+    );
+    const [job] = await tx
+      .select()
+      .from(editorialJobs)
+      .where(eq(editorialJobs.id, jobId))
+      .limit(1);
+    if (!job) throw new Error('Không tìm thấy tác vụ biên tập.');
+    if (job.status === 'completed')
+      return { job, reason: 'completed' as const };
+    if (job.stage !== 'generate')
+      return { job, reason: 'wrong-stage' as const };
+    const saved = record(job.result);
+    if (job.status !== 'queued') return { job, reason: 'not-queued' as const };
+    if (job.retryAt && job.retryAt > new Date())
+      return { job, reason: 'cooldown' as const };
+    if (!saved.generated && job.attemptCount >= job.maxAttempts) {
+      const [failed] = await tx
+        .update(editorialJobs)
+        .set({
+          status: 'failed',
+          completedAt: new Date(),
+          errorMessage:
+            'Đã hết số lần thử. Cần kiểm tra job trước khi chạy lại.',
+          updatedAt: new Date(),
+        })
+        .where(eq(editorialJobs.id, job.id))
+        .returning();
+      return { job: failed, reason: 'max-attempts' as const };
+    }
+    const result = { ...saved, runToken: token };
+    const [updated] = await tx
+      .update(editorialJobs)
+      .set({
+        status: 'running',
+        result,
+        startedAt: new Date(),
+        attemptCount: job.attemptCount + (saved.generated ? 0 : 1),
+        updatedAt: new Date(),
+        errorMessage: null,
+      })
+      .where(eq(editorialJobs.id, job.id))
+      .returning();
+    return { job: updated, reason: null };
+  });
+  const job = claimed.job;
+  const saved = record(job.result);
+  if (claimed.reason) {
+    if (
+      claimed.reason === 'completed' &&
+      typeof saved.reservationKey === 'string' &&
+      saved.generated
+    ) {
+      const generated = saved.generated as GeneratedDraft;
+      await settleEditorialCost(saved.reservationKey, {
+        actualVnd: estimateEditorialTextActualVnd(generated),
+        provider: generated.provider,
+        model: generated.model,
+      }).catch(() => undefined);
+    }
+    return {
+      status:
+        claimed.reason === 'completed'
+          ? ('completed' as const)
+          : ('skipped' as const),
+      reason: claimed.reason,
+    };
   }
   const payload = jobPayload(job.payload);
-  const reservationKey = `editorial:generate:${job.id}:${job.attemptCount + 1}`;
-  const reservation = await reserveEditorialCost({
-    idempotencyKey: reservationKey,
-    entryType: 'generation',
-    reservedVnd: estimateEditorialTextReservationVnd({
-      promptCharacters: editorialPromptCharacters(job.topic, payload),
-    }),
-    jobId: job.id,
-    metadata: { stage: 'generate' },
-  });
-  if (!reservation.accepted) {
+  const reservationKey =
+    typeof saved.reservationKey === 'string'
+      ? saved.reservationKey
+      : 'editorial:generate:' + job.id + ':' + job.attemptCount;
+  const reservation = saved.generated
+    ? { accepted: true, duplicate: false }
+    : await reserveEditorialCost({
+        idempotencyKey: reservationKey,
+        entryType: 'generation',
+        reservedVnd: estimateEditorialTextReservationVnd({
+          promptCharacters: editorialPromptCharacters(job.topic, payload),
+        }),
+        jobId: job.id,
+        metadata: { stage: 'generate' },
+      });
+  const ownsClaim = and(
+    eq(editorialJobs.id, job.id),
+    sql`${editorialJobs.result}->>'runToken' = ${token}`,
+  );
+  if (!reservation.accepted || reservation.duplicate) {
     await db
       .update(editorialJobs)
       .set({
         status: 'queued',
-        retryAt: new Date(Date.now() + 24 * 60 * 60 * 1_000),
-        errorMessage: 'Ngân sách biên tập hôm nay hoặc tháng này không đủ.',
+        retryAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        attemptCount: reservation.duplicate
+          ? job.attemptCount
+          : Math.max(0, job.attemptCount - 1),
+        errorMessage: 'Chờ ngân sách hoặc đối soát lượt gọi trước.',
         updatedAt: new Date(),
       })
-      .where(eq(editorialJobs.id, job.id));
+      .where(ownsClaim);
     return { status: 'waiting_budget' as const };
   }
-  const startedAt = new Date();
-  await db
-    .update(editorialJobs)
-    .set({
-      status: 'running',
-      attemptCount: job.attemptCount + 1,
-      startedAt,
-      updatedAt: startedAt,
-      errorMessage: null,
-    })
-    .where(eq(editorialJobs.id, job.id));
+  const observer = attemptObserver(job.id, 'generate');
+  let generated = saved.generated as GeneratedDraft | undefined;
+  let outputSaved = Boolean(generated);
   try {
-    const generated = await generateEditorialDraft(
-      job.topic,
-      payload.sources ?? [],
-      AbortSignal.timeout(35_000),
-      payload.evidence ?? [],
-    );
-    await recordGenerationAttempts(job.id, generated.attempts);
-    const created = payload.articleIdToRevise
-      ? {
-          article: { id: payload.articleIdToRevise },
-          revision: await createEditorialRevision({
-            articleId: payload.articleIdToRevise,
-            title: generated.title,
-            excerpt: generated.excerpt,
-            contentMarkdown: generated.contentMarkdown,
-            category: payload.category ?? 'news',
-            sources: payload.sources ?? [],
-            evidence: payload.evidence ?? [],
-            seoTitle: generated.seoTitle,
-            seoDescription: generated.seoDescription,
-            coverAlt: generated.coverAlt,
-            imagePrompt: generated.imagePrompt,
-            reviewNote: payload.reviewNote,
-          }),
-        }
-      : await createArticleDraft({
-          title: generated.title,
-          excerpt: generated.excerpt,
-          contentMarkdown: generated.contentMarkdown,
-          category: payload.category ?? 'news',
-          sources: payload.sources ?? [],
-          evidence: payload.evidence ?? [],
-          sourceEventId: payload.sourceEventId ?? job.sourceEventId,
-          seoTitle: generated.seoTitle,
-          seoDescription: generated.seoDescription,
-          coverAlt: generated.coverAlt,
-          imagePrompt: generated.imagePrompt,
-        });
-    await db
-      .update(editorialJobs)
-      .set({
-        status: 'completed',
-        provider: generated.provider,
-        model: generated.model,
-        inputTokens: generated.inputTokens,
-        outputTokens: generated.outputTokens,
-        articleId: created.article.id,
-        revisionId: created.revision.id,
-        result: {
-          provider: generated.provider,
-          attempts: generated.attempts.length,
-        },
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(editorialJobs.id, job.id));
+    if (!generated) {
+      const topic = payload.articleIdToRevise
+        ? `${job.topic}\nGóp ý đầy đủ: ${payload.reviewNote ?? ''}\nNội dung phiên bản cần sửa:\n${payload.baseMarkdown ?? ''}\nGiữ dữ kiện và cấu trúc phù hợp; chỉ sửa theo góp ý.`
+        : job.topic;
+      generated = await generateEditorialDraft(
+        topic,
+        payload.sources ?? [],
+        AbortSignal.timeout(35_000),
+        payload.evidence ?? [],
+        observer.observe,
+      );
+      // Persist provider output before materializing a revision: retries can reuse it without calling Gemini again.
+      const [checkpoint] = await db
+        .update(editorialJobs)
+        .set({
+          result: { runToken: token, generated, reservationKey },
+          updatedAt: new Date(),
+        })
+        .where(ownsClaim)
+        .returning({ id: editorialJobs.id });
+      if (!checkpoint)
+        throw new EditorialStateError('Job đã được một worker khác nhận.');
+      outputSaved = true;
+    }
+    const draft = generated;
+    const created = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${'editorial:job:' + job.id}))`,
+      );
+      const [owner] = await tx
+        .select()
+        .from(editorialJobs)
+        .where(ownsClaim)
+        .limit(1);
+      if (!owner || owner.status !== 'running')
+        throw new EditorialStateError('Job đã thay đổi.');
+      const values = {
+        title: draft.title,
+        excerpt: draft.excerpt,
+        contentMarkdown: draft.contentMarkdown,
+        category: payload.category ?? ('news' as const),
+        sources: payload.sources ?? [],
+        evidence: payload.evidence ?? [],
+        seoTitle: draft.seoTitle,
+        seoDescription: draft.seoDescription,
+        coverAlt: draft.coverAlt,
+        imagePrompt: draft.imagePrompt,
+      };
+      const output = payload.articleIdToRevise
+        ? {
+            article: { id: payload.articleIdToRevise },
+            revision: await createEditorialRevision(
+              {
+                ...values,
+                articleId: payload.articleIdToRevise,
+                revisionId: payload.revisionIdToRevise,
+                version: payload.baseRevisionVersion,
+                reviewNote: payload.reviewNote,
+              },
+              tx,
+            ),
+          }
+        : await createArticleDraft(
+            {
+              ...values,
+              sourceEventId: payload.sourceEventId ?? job.sourceEventId,
+            },
+            tx,
+          );
+      await tx
+        .update(editorialJobs)
+        .set({
+          status: 'completed',
+          provider: draft.provider,
+          model: draft.model,
+          inputTokens: draft.inputTokens,
+          outputTokens: draft.outputTokens,
+          articleId: output.article.id,
+          revisionId: output.revision.id,
+          result: { runToken: token, generated: draft, reservationKey },
+          completedAt: new Date(),
+          updatedAt: new Date(),
+          retryAt: null,
+        })
+        .where(ownsClaim);
+      return output;
+    });
+    // Accounting failures never put a completed content job back into the generation queue.
     await settleEditorialCost(reservationKey, {
-      actualVnd: estimateEditorialTextActualVnd({
-        inputTokens: generated.inputTokens,
-        outputTokens: generated.outputTokens,
-      }),
-      provider: generated.provider,
-      model: generated.model,
+      actualVnd: estimateEditorialTextActualVnd(draft),
+      provider: draft.provider,
+      model: draft.model,
+    }).catch(async () => {
+      await db
+        .update(editorialJobs)
+        .set({ errorMessage: 'Nội dung hoàn tất; cần đối soát chi phí.' })
+        .where(ownsClaim);
     });
     return {
       status: 'completed' as const,
@@ -622,46 +753,42 @@ export async function runEditorialGenerationJob(jobId: string) {
   } catch (error) {
     const attempts =
       error instanceof EditorialGenerationError ? error.attempts : [];
-    await recordGenerationAttempts(job.id, attempts);
     const retryable =
-      error instanceof EditorialGenerationError
-        ? attempts.length > 0 &&
-          attempts.every(
-            (attempt) => attempt.retryable || attempt.status === 'skipped',
-          )
-        : true;
-    const retryAfterMs = Math.max(
-      0,
+      !(error instanceof EditorialStateError) &&
+      (outputSaved ||
+        !(error instanceof EditorialGenerationError) ||
+        attempts.some((attempt) => attempt.retryable));
+    const retry =
+      retryable && (outputSaved || job.attemptCount < job.maxAttempts);
+    const delay = Math.max(
+      60_000,
       ...attempts.map((attempt) => attempt.retryAfterMs ?? 0),
     );
     await db
       .update(editorialJobs)
       .set({
-        status:
-          retryable && job.attemptCount + 1 < job.maxAttempts
-            ? 'queued'
-            : 'failed',
-        retryAt: retryable
-          ? new Date(Date.now() + Math.max(60_000, retryAfterMs))
-          : null,
+        status: retry ? 'queued' : 'failed',
+        retryAt: retry ? new Date(Date.now() + delay) : null,
         errorMessage:
           error instanceof Error
             ? error.message.slice(0, 500)
             : 'Không tạo được bản nháp.',
         updatedAt: new Date(),
-        completedAt: retryable ? null : new Date(),
+        completedAt: retry ? null : new Date(),
       })
-      .where(eq(editorialJobs.id, job.id));
-    const usedUpstream = attempts.some(
-      (attempt) => attempt.status !== 'skipped',
-    );
-    if (usedUpstream) {
+      .where(ownsClaim);
+    if (observer.contacted() || outputSaved)
       await settleEditorialCost(reservationKey, {});
-    } else {
-      await releaseEditorialCost(reservationKey);
-    }
-    return { status: retryable ? ('retrying' as const) : ('failed' as const) };
+    else await releaseEditorialCost(reservationKey);
+    return { status: retry ? ('retrying' as const) : ('failed' as const) };
   }
+}
+export async function runEditorialGenerationJob(jobId: string) {
+  const result = await withDatabaseAdvisoryLock(
+    'editorial-generation:' + jobId,
+    () => runEditorialGenerationJobLocked(jobId),
+  );
+  return result ?? { status: 'skipped' as const, reason: 'already-running' };
 }
 
 /** Queue exactly one English translation for a specific published revision. */
@@ -682,7 +809,10 @@ export async function queueEditorialTranslation(
       .insert(articleTranslations)
       .values({ sourceRevisionId: revision.id, locale: 'en', status: 'queued' })
       .onConflictDoNothing({
-        target: [articleTranslations.sourceRevisionId, articleTranslations.locale],
+        target: [
+          articleTranslations.sourceRevisionId,
+          articleTranslations.locale,
+        ],
       });
     await db
       .update(articleTranslations)
@@ -693,12 +823,16 @@ export async function queueEditorialTranslation(
           eq(articleTranslations.locale, 'en'),
         ),
       );
+    revalidateEditorialPublicContent();
   } else {
     await db
       .insert(articleTranslations)
       .values({ sourceRevisionId: revision.id, locale: 'en', status: 'queued' })
       .onConflictDoNothing({
-        target: [articleTranslations.sourceRevisionId, articleTranslations.locale],
+        target: [
+          articleTranslations.sourceRevisionId,
+          articleTranslations.locale,
+        ],
       });
   }
 
@@ -733,10 +867,7 @@ export async function queueMissingEditorialTranslations(limit = 12) {
       ),
     )
     .where(
-      and(
-        eq(articles.status, 'published'),
-        isNull(articleTranslations.id),
-      ),
+      and(eq(articles.status, 'published'), isNull(articleTranslations.id)),
     )
     .orderBy(desc(articles.publishedAt))
     .limit(Math.max(1, Math.min(24, limit)));
@@ -756,6 +887,8 @@ async function runEditorialTranslationJobLocked(jobId: string) {
     .limit(1);
   if (!job) throw new Error('Không tìm thấy tác vụ dịch bài viết.');
   if (job.status === 'completed') return { status: 'completed' as const, job };
+  if (job.status !== 'queued' || (job.retryAt && job.retryAt > new Date()))
+    return { status: 'skipped' as const, reason: 'cooldown-or-running' };
   if (job.stage !== 'translate')
     return { status: 'skipped' as const, reason: 'wrong-stage' };
   if (!job.revisionId || job.attemptCount >= job.maxAttempts)
@@ -766,7 +899,8 @@ async function runEditorialTranslationJobLocked(jobId: string) {
     .from(articleRevisions)
     .where(eq(articleRevisions.id, job.revisionId))
     .limit(1);
-  if (!revision) throw new Error('Phiên bản bài viết cần dịch không còn tồn tại.');
+  if (!revision)
+    throw new Error('Phiên bản bài viết cần dịch không còn tồn tại.');
 
   const reservationKey = `editorial:translate:${job.id}:${job.attemptCount + 1}`;
   const reservation = await reserveEditorialCost({
@@ -809,12 +943,13 @@ async function runEditorialTranslationJobLocked(jobId: string) {
       errorMessage: null,
     })
     .where(eq(editorialJobs.id, job.id));
+  const observer = attemptObserver(job.id, 'translate');
   try {
     const translated = await generateEditorialTranslation(
       revision,
       AbortSignal.timeout(80_000),
+      observer.observe,
     );
-    await recordGenerationAttempts(job.id, translated.attempts, 'translate');
     const now = new Date();
     await db
       .update(articleTranslations)
@@ -866,19 +1001,21 @@ async function runEditorialTranslationJobLocked(jobId: string) {
       .from(articles)
       .where(eq(articles.id, revision.articleId))
       .limit(1);
-    revalidatePath('/');
-    revalidatePath('/nhip-vang');
-    if (article) revalidatePath(`/nhip-vang/${article.slug}`);
+    revalidateEditorialPublicContent(article?.slug);
     return { status: 'completed' as const, revisionId: revision.id };
   } catch (error) {
-    const attempts = error instanceof EditorialGenerationError ? error.attempts : [];
-    await recordGenerationAttempts(job.id, attempts, 'translate');
+    const attempts =
+      error instanceof EditorialGenerationError ? error.attempts : [];
     const failures = attempts.filter((attempt) => attempt.status === 'failed');
-    const retryable = error instanceof EditorialGenerationError
-      ? failures.length > 0 && failures.every((attempt) => attempt.retryable)
-      : true;
+    const retryable =
+      error instanceof EditorialGenerationError
+        ? failures.length > 0 && failures.every((attempt) => attempt.retryable)
+        : true;
     const retry = retryable && job.attemptCount + 1 < job.maxAttempts;
-    const message = error instanceof Error ? error.message.slice(0, 500) : 'Không thể dịch bài viết.';
+    const message =
+      error instanceof Error
+        ? error.message.slice(0, 500)
+        : 'Không thể dịch bài viết.';
     await db
       .update(editorialJobs)
       .set({
@@ -889,7 +1026,7 @@ async function runEditorialTranslationJobLocked(jobId: string) {
         completedAt: retry ? null : new Date(),
       })
       .where(eq(editorialJobs.id, job.id));
-    if (!retry)
+    if (!retry) {
       await db
         .update(articleTranslations)
         .set({ status: 'failed', errorMessage: message, updatedAt: new Date() })
@@ -899,8 +1036,9 @@ async function runEditorialTranslationJobLocked(jobId: string) {
             eq(articleTranslations.locale, 'en'),
           ),
         );
-    if (attempts.some((attempt) => attempt.status !== 'skipped'))
-      await settleEditorialCost(reservationKey, {});
+      revalidateEditorialPublicContent();
+    }
+    if (observer.contacted()) await settleEditorialCost(reservationKey, {});
     else await releaseEditorialCost(reservationKey);
     return { status: retry ? ('retrying' as const) : ('failed' as const) };
   }
@@ -938,7 +1076,7 @@ export async function runEditorialImageJob(jobId: string) {
 }
 
 async function sourcesRemainReachable(sources: EditorialSource[]) {
-  if (!sources.length) return false;
+  if (!sources.length) return true;
   const checks = await Promise.all(
     sources.slice(0, 3).map(async (source) => {
       try {
@@ -990,24 +1128,21 @@ async function recheckScheduledSources(localDate: string) {
       continue;
     }
     await db.transaction(async (tx) => {
-      await tx
-        .update(articleRevisions)
-        .set({
-          approvalStatus: 'revoked',
-          reviewNote: 'Nguồn cần kiểm tra lại trước khi đăng theo lịch.',
-          reviewedAt: new Date(),
-        })
-        .where(eq(articleRevisions.id, candidate.revision.id));
+      if (candidate.slot.articleId)
+        await lockEditorialArticle(tx, candidate.slot.articleId);
       await tx
         .update(editorialPublicationSlots)
         .set({
-          status: 'failed',
-          failureCount: candidate.slot.failureCount + 1,
-          failureMessage: 'Nguồn không còn phản hồi; cần Admin duyệt lại.',
-          lastFailedAt: new Date(),
+          failureMessage:
+            'Nguồn tạm thời không phản hồi; kiểm tra lại nguồn trước giờ đăng.',
           updatedAt: new Date(),
         })
-        .where(eq(editorialPublicationSlots.id, candidate.slot.id));
+        .where(
+          and(
+            eq(editorialPublicationSlots.id, candidate.slot.id),
+            eq(editorialPublicationSlots.status, 'scheduled'),
+          ),
+        );
     });
   }
   return results;
@@ -1016,6 +1151,41 @@ async function recheckScheduledSources(localDate: string) {
 export async function reconcileEditorialWork() {
   const localDate = vietnamLocalDate();
   await ensurePublicationSlots(localDate);
+  const staleRunning = await getDatabase()
+    .select({ id: editorialJobs.id, stage: editorialJobs.stage })
+    .from(editorialJobs)
+    .where(
+      and(
+        eq(editorialJobs.status, 'running'),
+        lte(editorialJobs.updatedAt, new Date(Date.now() - 2 * 60_000)),
+      ),
+    )
+    .limit(12);
+  for (const job of staleRunning) {
+    await withDatabaseAdvisoryLock(
+      (job.stage === 'translate'
+        ? 'editorial-translation:'
+        : 'editorial-generation:') + job.id,
+      async () => {
+        await getDatabase()
+          .update(editorialJobs)
+          .set({
+            status: 'queued',
+            retryAt: null,
+            updatedAt: new Date(),
+            result: sql`coalesce(${editorialJobs.result}, '{}'::jsonb) || jsonb_build_object('runToken', ${randomUUID()}::text)`,
+            errorMessage: 'Khôi phục job sau khi worker dừng.',
+          })
+          .where(
+            and(
+              eq(editorialJobs.id, job.id),
+              eq(editorialJobs.status, 'running'),
+              lte(editorialJobs.updatedAt, new Date(Date.now() - 2 * 60_000)),
+            ),
+          );
+      },
+    );
+  }
   const sourceChecks = await recheckScheduledSources(localDate);
   const slots = await getDatabase()
     .select()

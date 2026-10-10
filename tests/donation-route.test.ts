@@ -51,6 +51,18 @@ describe('donation order route', () => {
       Response.json({ error: 'Quá nhiều yêu cầu.' }, { status: 429 }),
     );
   });
+  it('accepts the forwarded public origin while keeping unrelated origins blocked', async () => {
+    mocks.createDonationOrder.mockResolvedValue({ id: 'forwarded-order' });
+    const forwarded = new Request('http://localhost:3000/api/donations/orders', {
+      method: 'POST',
+      headers: { origin: 'https://www.vanghomnay.online',
+        'x-forwarded-host': 'www.vanghomnay.online', 'x-forwarded-proto': 'https',
+        'content-type': 'application/json' },
+      body: JSON.stringify({ amountVnd: 20_000 }),
+    });
+    expect((await POST(forwarded)).status).toBe(200);
+    expect((await POST(request({ amountVnd: 20_000 }, 'https://unrelated.example'))).status).toBe(403);
+  });
   it('validates the amount before creating an order', async () => {
     const response = await POST(request({ amountVnd: 99 }));
     expect(response.status).toBe(400);

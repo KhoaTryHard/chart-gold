@@ -37,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLocale } from '@/components/locale-provider';
-import { localeLabels, type Locale } from '@/lib/i18n';
+import { englishEnabled, localeLabels, type Locale } from '@/lib/i18n';
 import { useTheme } from '@/components/theme-provider';
 import type { DashboardHeaderActions } from '@/components/app-shell';
 import { AccountMenu } from '@/components/analysis/account-menu';
@@ -309,7 +309,7 @@ export function SiteHeader({
             </div>
           </nav>
           <div className="glass-header__utilities">
-            <LanguageToggle />
+            {englishEnabled ? <LanguageToggle /> : null}
             <ThemeToggle />
             <AccountMenu
               context={sharedAccount?.context ?? 'general'}
@@ -391,15 +391,17 @@ function MobileMoreMenu({ locale }: { locale: Locale }) {
           {english ? 'Support the project' : 'Ủng hộ dự án'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup
-          value={locale}
-          onValueChange={(value) => {
-            if (value === 'vi' || value === 'en') void setLocale(value);
-          }}
-        >
-          <DropdownMenuRadioItem value="vi" className="glass-menu__item">Tiếng Việt</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="en" className="glass-menu__item">English</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        {englishEnabled ? (
+          <DropdownMenuRadioGroup
+            value={locale}
+            onValueChange={(value) => {
+              if (value === 'vi' || value === 'en') void setLocale(value);
+            }}
+          >
+            <DropdownMenuRadioItem value="vi" className="glass-menu__item">Tiếng Việt</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="en" className="glass-menu__item">English</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        ) : null}
         <DropdownMenuItem
           className="glass-menu__item"
           onClick={() => setPreference(nextTheme)}

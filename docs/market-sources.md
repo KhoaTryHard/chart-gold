@@ -19,6 +19,12 @@ giá thay thế.
   `/ProductHome/getGoldDate?date=dd/mm/yyyy` theo từng ngày, tối đa 7 ngày để
   không tạo tải lớn lên website. Giá nguồn là nghìn đồng/chỉ, được chuẩn hóa
   sang triệu đồng/lượng. Quote hiện tại luôn được tải trước lịch sử.
+- **Bảo Tín Mạnh Hải (BTMH)**: bảng giá chính thức tại
+  `https://baotinmanhhai.vn/bang-gia-vang`, dùng GraphQL công khai của website
+  (`/api/graphql`) cho quote và biểu đồ. Chuẩn hóa theo đơn vị thực tế mỗi dòng;
+  sản phẩm chỉ có giá mua không chọn được. Sáu dòng có đủ quy cách hỗ trợ lịch
+  sử một năm; Tiểu Kim Cát chỉ lưu giá hiện tại có quy cách đã xác minh vì lịch
+  sử nguồn trộn nhiều trọng lượng.
 - **Phú Quý**: bảng giá chính thức tại
   `https://gold.phuquy.com.vn/giavang` và lịch sử tại `/XemLai?date=YYYY-MM-DD`.
   Bảng nguồn là VNĐ/chỉ, được chuẩn hóa sang triệu đồng/lượng. Lịch sử tối đa

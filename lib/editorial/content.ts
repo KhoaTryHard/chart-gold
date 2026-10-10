@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
 import { getDatabase } from '@/db';
 import { articleRevisions, articleTranslations, articles } from '@/db/schema';
 import type {
@@ -9,9 +11,7 @@ import type {
   PublicArticle,
   PublicArticleCard,
 } from './types';
-
-/** Public editorial reads intentionally use the shared database. */
-export function clearEditorialCache(_slug?: string) {}
+import { editorialPublicCacheSeconds, editorialPublicCacheTag } from './public-cache';
 
 function editorialDatabaseConfigured() {
   return Boolean(process.env.DATABASE_URL?.trim());
@@ -82,26 +82,20 @@ function publishedQuery(locale: EditorialLocale) {
     );
 }
 
-export async function listPublishedArticles(
-  options: {
-    category?: EditorialCategory;
-    page?: number;
-    limit?: number;
-    locale?: EditorialLocale;
-  } = {},
+async function readPublishedArticles(
+  locale: EditorialLocale,
+  category: EditorialCategory | null,
+  page: number,
+  limit: number,
 ): Promise<PublicArticleCard[]> {
-  if (!editorialDatabaseConfigured()) return [];
-  const locale = options.locale ?? 'vi';
-  const page = Math.max(1, options.page ?? 1);
-  const limit = Math.min(1000, Math.max(1, options.limit ?? 12));
   const now = new Date();
   const rows = await publishedQuery(locale)
     .where(
       and(
         eq(articles.status, 'published'),
         isNotNull(articles.publishedRevisionId),
-        options.category
-          ? sql`coalesce(${articles.publishedCategory}, ${articleRevisions.publicationCategory}, ${articles.category}) = ${options.category}`
+        category
+          ? sql`coalesce(${articles.publishedCategory}, ${articleRevisions.publicationCategory}, ${articles.category}) = ${category}`
           : undefined,
       ),
     )
@@ -127,11 +121,30 @@ export async function listPublishedArticles(
   });
 }
 
-export async function getPublishedArticle(
+const readCachedPublishedArticles = unstable_cache(
+  readPublishedArticles,
+  ['editorial-public-list-v1'],
+  { tags: [editorialPublicCacheTag], revalidate: editorialPublicCacheSeconds },
+);
+
+export async function listPublishedArticles(
+  options: {
+    category?: EditorialCategory;
+    page?: number;
+    limit?: number;
+    locale?: EditorialLocale;
+  } = {},
+): Promise<PublicArticleCard[]> {
+  if (!editorialDatabaseConfigured()) return [];
+  const page = Number.isFinite(options.page) ? Math.max(1, Math.floor(options.page!)) : 1;
+  const limit = Number.isFinite(options.limit) ? Math.min(1000, Math.max(1, Math.floor(options.limit!))) : 12;
+  return readCachedPublishedArticles(options.locale ?? 'vi', options.category ?? null, page, limit);
+}
+
+async function readPublishedArticle(
   slug: string,
-  locale: EditorialLocale = 'vi',
+  locale: EditorialLocale,
 ) {
-  if (!editorialDatabaseConfigured()) return null;
   const [row] = await publishedQuery(locale)
     .where(
       and(
@@ -143,6 +156,21 @@ export async function getPublishedArticle(
     .limit(1);
   return row ? toPublicArticle(row, locale) : null;
 }
+
+const readCachedPublishedArticle = unstable_cache(
+  readPublishedArticle,
+  ['editorial-public-article-v1'],
+  { tags: [editorialPublicCacheTag], revalidate: editorialPublicCacheSeconds },
+);
+
+// Metadata and the article body share one read within a server render.
+export const getPublishedArticle = cache(async (
+  slug: string,
+  locale: EditorialLocale = 'vi',
+) => {
+  if (!editorialDatabaseConfigured()) return null;
+  return readCachedPublishedArticle(slug, locale);
+});
 
 export async function listArticleSlugs() {
   try {

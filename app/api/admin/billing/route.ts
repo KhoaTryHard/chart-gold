@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isTrustedOrigin } from '@/lib/server/origin';
 
 import { auth } from '@/auth';
 import {
@@ -32,16 +33,6 @@ const mutationSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-function sameOrigin(request: Request) {
-  try {
-    const origin = request.headers.get('origin');
-    return Boolean(
-      origin && new URL(origin).origin === new URL(request.url).origin,
-    );
-  } catch {
-    return false;
-  }
-}
 
 function responseError(error: unknown) {
   if (error instanceof BillingError)
@@ -66,7 +57,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request))
+  if (!isTrustedOrigin(request))
     return Response.json({ error: 'Yêu cầu không hợp lệ.' }, { status: 403 });
   try {
     const session = await auth();

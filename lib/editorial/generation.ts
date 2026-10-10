@@ -23,6 +23,10 @@ export type EditorialGenerationAttempt = {
   outputTokens: number | null;
   errorMessage?: string;
 };
+export type EditorialAttemptObserver = (event: {
+  phase: 'started' | 'finished';
+  attempt: EditorialGenerationAttempt;
+}) => Promise<void>;
 
 export type GeneratedDraft = {
   title: string;
@@ -159,7 +163,10 @@ export function validateEditorialTranslation(
     excerpt: string;
     contentMarkdown: string;
   },
-  translation: Pick<GeneratedTranslation, 'title' | 'excerpt' | 'contentMarkdown'>,
+  translation: Pick<
+    GeneratedTranslation,
+    'title' | 'excerpt' | 'contentMarkdown'
+  >,
 ) {
   const sourceText = `${source.title}\n${source.excerpt}\n${source.contentMarkdown}`;
   const translatedText = `${translation.title}\n${translation.excerpt}\n${translation.contentMarkdown}`;
@@ -280,7 +287,13 @@ async function requestProvider(
 ) {
   if (config.provider !== 'gemini')
     throw new Error('Editorial chỉ hỗ trợ Gemini bằng key riêng.');
-  return requestGemini(config, userPrompt, systemInstruction, maxOutputTokens, signal);
+  return requestGemini(
+    config,
+    userPrompt,
+    systemInstruction,
+    maxOutputTokens,
+    signal,
+  );
 }
 
 function providerStorageName(provider: EditorialProvider): string {
@@ -324,6 +337,7 @@ export async function generateEditorialDraft(
   sources: EditorialSource[] = [],
   signal?: AbortSignal,
   evidence: EditorialEvidence[] = [],
+  observe?: EditorialAttemptObserver,
 ): Promise<GeneratedDraft> {
   const attempts: EditorialGenerationAttempt[] = [];
   const userPrompt = editorialUserPrompt(topic, sources, evidence);
@@ -337,6 +351,14 @@ export async function generateEditorialDraft(
     }
 
     try {
+      await observe?.({
+        phase: 'started',
+        attempt: {
+          ...skippedAttempt(config),
+          status: 'failed',
+          retryable: true,
+        },
+      });
       const response = await requestProvider(
         config,
         userPrompt,
@@ -356,6 +378,7 @@ export async function generateEditorialDraft(
         outputTokens: response.outputTokens,
       };
       attempts.push(attempt);
+      await observe?.({ phase: 'finished', attempt });
       return {
         ...parsed,
         provider: providerStorageName(config.provider),
@@ -365,9 +388,15 @@ export async function generateEditorialDraft(
         attempts,
       };
     } catch (error) {
-      if (signal?.aborted) throw abortedError(attempts, error);
-      const failure = classifyEditorialProviderError(error);
-      attempts.push({
+      const failure = signal?.aborted
+        ? {
+            retryable: true,
+            statusCode: null,
+            retryAfterMs: 60_000,
+            message: 'Provider timeout sau khi gửi yêu cầu.',
+          }
+        : classifyEditorialProviderError(error);
+      const attempt: EditorialGenerationAttempt = {
         provider: config.provider,
         model: config.model,
         status: 'failed',
@@ -377,7 +406,10 @@ export async function generateEditorialDraft(
         inputTokens: null,
         outputTokens: null,
         errorMessage: failure.message,
-      });
+      };
+      attempts.push(attempt);
+      await observe?.({ phase: 'finished', attempt });
+      if (signal?.aborted) throw abortedError(attempts, error);
       if (!failure.retryable) {
         throw new EditorialGenerationError(
           `Không thể tạo bản nháp với ${config.provider}: ${failure.message}`,
@@ -404,6 +436,7 @@ export async function generateEditorialTranslation(
     coverAlt?: string | null;
   },
   signal?: AbortSignal,
+  observe?: EditorialAttemptObserver,
 ): Promise<GeneratedTranslation> {
   const maxChunkCharacters = 6_000;
   if (source.contentMarkdown.length > maxChunkCharacters) {
@@ -444,6 +477,7 @@ export async function generateEditorialTranslation(
         const translation = await generateEditorialTranslation(
           { ...source, contentMarkdown: chunk },
           signal,
+          observe,
         );
         translations.push(translation);
         attempts.push(...translation.attempts);
@@ -452,22 +486,25 @@ export async function generateEditorialTranslation(
       const failedAttempts =
         error instanceof EditorialGenerationError ? error.attempts : [];
       throw new EditorialGenerationError(
-        error instanceof Error ? error.message : 'Unable to translate article section.',
+        error instanceof Error
+          ? error.message
+          : 'Unable to translate article section.',
         [...attempts, ...failedAttempts],
         error,
       );
     }
     const first = translations[0];
     if (!first)
-      throw new EditorialGenerationError('Article has no translatable content.', []);
+      throw new EditorialGenerationError(
+        'Article has no translatable content.',
+        [],
+      );
     const contentParts = translations.map((item) =>
       item.contentMarkdown.replace(/\n+$/g, ''),
     );
     const contentMarkdown = contentParts.reduce(
       (joined, part, index) =>
-        index === 0
-          ? part
-          : `${joined}${separators[index - 1] ?? '\n'}${part}`,
+        index === 0 ? part : `${joined}${separators[index - 1] ?? '\n'}${part}`,
       '',
     );
     const tokenTotal = (key: 'inputTokens' | 'outputTokens') => {
@@ -498,6 +535,14 @@ export async function generateEditorialTranslation(
       continue;
     }
     try {
+      await observe?.({
+        phase: 'started',
+        attempt: {
+          ...skippedAttempt(config),
+          status: 'failed',
+          retryable: true,
+        },
+      });
       const response = await requestProvider(
         config,
         userPrompt,
@@ -526,11 +571,21 @@ export async function generateEditorialTranslation(
         attempts,
       };
       validateEditorialTranslation(source, translation);
+      await observe?.({
+        phase: 'finished',
+        attempt: attempts[attempts.length - 1],
+      });
       return translation;
     } catch (error) {
-      if (signal?.aborted) throw abortedError(attempts, error);
-      const failure = classifyEditorialProviderError(error);
-      attempts.push({
+      const failure = signal?.aborted
+        ? {
+            retryable: true,
+            statusCode: null,
+            retryAfterMs: 60_000,
+            message: 'Provider timeout sau khi gửi yêu cầu.',
+          }
+        : classifyEditorialProviderError(error);
+      const attempt: EditorialGenerationAttempt = {
         provider: config.provider,
         model: config.model,
         status: 'failed',
@@ -540,7 +595,10 @@ export async function generateEditorialTranslation(
         inputTokens: null,
         outputTokens: null,
         errorMessage: failure.message,
-      });
+      };
+      attempts.push(attempt);
+      await observe?.({ phase: 'finished', attempt });
+      if (signal?.aborted) throw abortedError(attempts, error);
       if (!failure.retryable)
         throw new EditorialGenerationError(
           `Unable to translate with ${config.provider}: ${failure.message}`,

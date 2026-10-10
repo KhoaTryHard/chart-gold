@@ -41,46 +41,47 @@ export async function withDatabaseAdvisoryLock<T>(
   if (!connectionString)
     throw new Error('DATABASE_URL is required for market history.');
   if (!globalForDatabase.__kimTuyenPool) getDatabase();
-  const client = await globalForDatabase.__kimTuyenPool!.connect();
+  // A lease is a row owned by an id, not a connection-level lock. Do not keep a
+  // pool connection idle while work needs connections from the same small pool.
+  const leasePool = globalForDatabase.__kimTuyenPool!;
   const owner = randomUUID();
   const leaseMs = 30_000;
-  try {
-    const result = await client.query<{ owner: string }>(
-      `insert into market_history_leases
-         (key, owner, expires_at, heartbeat_at, updated_at)
-       values ($1, $2, now() + ($3 * interval '1 millisecond'), now(), now())
-       on conflict (key) do update set
-         owner = excluded.owner,
-         expires_at = excluded.expires_at,
-         heartbeat_at = now(),
-         updated_at = now()
-       where market_history_leases.expires_at <= now()
-       returning owner`,
-      [key, owner, leaseMs],
-    );
-    if (result.rows[0]?.owner !== owner) return null;
-    const heartbeat = setInterval(() => {
-      void client
+  const result = await leasePool.query<{ owner: string }>(
+    `insert into market_history_leases
+       (key, owner, expires_at, heartbeat_at, updated_at)
+     values ($1, $2, now() + ($3 * interval '1 millisecond'), now(), now())
+     on conflict (key) do update set
+       owner = excluded.owner,
+       expires_at = excluded.expires_at,
+       heartbeat_at = now(),
+       updated_at = now()
+     where market_history_leases.expires_at <= now()
+     returning owner`,
+    [key, owner, leaseMs],
+  );
+  if (result.rows[0]?.owner !== owner) return null;
+  const heartbeat = setInterval(
+    () => {
+      void leasePool
         .query(
           `update market_history_leases
-           set expires_at = now() + ($3 * interval '1 millisecond'),
-               heartbeat_at = now(), updated_at = now()
-           where key = $1 and owner = $2`,
+         set expires_at = now() + ($3 * interval '1 millisecond'),
+             heartbeat_at = now(), updated_at = now()
+         where key = $1 and owner = $2`,
           [key, owner, leaseMs],
         )
         .catch(() => undefined);
-    }, Math.floor(leaseMs / 3));
-    try {
-      return await work();
-    } finally {
-      clearInterval(heartbeat);
-      await client.query(
-        'delete from market_history_leases where key = $1 and owner = $2',
-        [key, owner],
-      );
-    }
+    },
+    Math.floor(leaseMs / 3),
+  );
+  try {
+    return await work();
   } finally {
-    client.release();
+    clearInterval(heartbeat);
+    await leasePool.query(
+      'delete from market_history_leases where key = $1 and owner = $2',
+      [key, owner],
+    );
   }
 }
 
@@ -89,7 +90,12 @@ export async function consumeRateLimit(
   limit: number,
   windowMs: number,
 ) {
-  if (!Number.isFinite(limit) || limit < 1 || !Number.isFinite(windowMs) || windowMs < 1)
+  if (
+    !Number.isFinite(limit) ||
+    limit < 1 ||
+    !Number.isFinite(windowMs) ||
+    windowMs < 1
+  )
     throw new Error('Invalid rate limit configuration.');
   if (!globalForDatabase.__kimTuyenPool) getDatabase();
   const client = await globalForDatabase.__kimTuyenPool!.connect();

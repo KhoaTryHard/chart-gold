@@ -11,6 +11,7 @@ import {
   isAnalysisFetch,
   marketFetch,
   marketHistoryDays,
+  recordMarketAdapterFailure,
 } from '@/lib/server/market-fetch';
 import type {
   MarketData,
@@ -373,7 +374,8 @@ async function loadBtmhMarketData(
   if (view !== 'history') {
     try {
       quote = parseBtmhQuote(await fetchBtmhRates(), product);
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
       // A first-party chart point can still serve the product when today's quote is down.
     }
   }
@@ -392,7 +394,8 @@ async function loadBtmhMarketData(
     const start = shiftDate(end, 1 - days);
     try {
       history = await fetchBtmhHistory(product, start, end);
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
       // Keep the live price available if the independent history query fails.
     }
   }

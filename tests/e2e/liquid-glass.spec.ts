@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { englishEnabled, localeCookieName } from '../../lib/i18n';
 
 const responsiveViewports = [
   { width: 320, height: 700 },
@@ -369,9 +370,69 @@ test('keeps the mobile header and bottom navigation within the safe layout', asy
   await expectNoHorizontalOverflow(page);
 });
 
+for (const savedLocale of [undefined, 'en'] as const) {
+  test(`keeps the website in Vietnamese with ${savedLocale ? 'an old English cookie' : 'no saved language'}`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    test.skip(englishEnabled, 'Vietnamese-only mode is disabled.');
+    await page.emulateMedia({ colorScheme: 'light' });
+    if (savedLocale) {
+      await context.addCookies([
+        { name: localeCookieName, value: savedLocale, url: baseURL!, httpOnly: true },
+      ]);
+    }
+
+    const response = await page.goto('/huong-dan', { waitUntil: 'domcontentloaded' });
+    const serverHtml = await response!.text();
+    expect(serverHtml).toMatch(/<html[^>]*\blang="vi"/);
+    expect(serverHtml).toContain('Hướng dẫn sử dụng Kim Tuyến');
+    expect(serverHtml).not.toContain('How to use Kim Tuyến');
+
+    const documentRoot = page.locator('html');
+    await expect(documentRoot).toHaveAttribute('data-locale', 'vi');
+    await expect(page.getByRole('heading', { name: 'Hướng dẫn sử dụng Kim Tuyến', exact: true })).toBeVisible();
+    await expect(page).toHaveTitle('Hướng dẫn sử dụng Kim Tuyến');
+    await expect(page.locator('.glass-language-control')).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+
+    const mobileMore = page.getByRole('button', { name: 'Mở thêm lựa chọn', exact: true });
+    if (await mobileMore.isVisible()) {
+      await mobileMore.click();
+      await expect(page.getByRole('menuitemradio')).toHaveCount(0);
+      await expect(page.getByRole('menuitem', { name: 'Hướng dẫn', exact: true })).toBeVisible();
+      await page.getByRole('menuitem', { name: 'Chuyển sang giao diện tối', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'Thêm', exact: true }).click();
+      await expect(page.getByRole('menuitemradio')).toHaveCount(0);
+      await expect(page.getByRole('menuitem', { name: 'Hướng dẫn từng bước', exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Chuyển sang giao diện tối', exact: true }).click();
+    }
+    await expect(documentRoot).toHaveClass(/\bdark\b/);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(documentRoot).toHaveAttribute('lang', 'vi');
+    await expect(documentRoot).toHaveAttribute('data-locale', 'vi');
+    await expect(page.locator('.glass-language-control')).toHaveCount(0);
+    await page.getByRole('link', { name: 'Kim Tuyến — Trang chủ · Giá vàng Việt Nam', exact: true }).click();
+    await expect(page).toHaveURL('/');
+    await expect(page).toHaveTitle('Giá vàng hôm nay, biểu đồ giá vàng Việt Nam — Kim Tuyến');
+    await expect(documentRoot).toHaveAttribute('lang', 'vi');
+    await expectNoHorizontalOverflow(page);
+
+    if (savedLocale) {
+      const cookie = (await context.cookies()).find((item) => item.name === localeCookieName);
+      expect(cookie?.value).toBe(savedLocale);
+    }
+  });
+}
+
 test('switches to English without losing the current layout or preference', async ({
   page,
 }) => {
+  test.skip(!englishEnabled, 'English switching is temporarily disabled.');
   await page.setViewportSize({ width: 390, height: 844 });
   await openHome(page);
 

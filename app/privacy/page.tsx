@@ -20,7 +20,7 @@ export default async function PrivacyPage() {
       intro={english
         ? 'This page summarizes the data Kim Tuyến handles when you view prices, use the account Gold Ledger, read Gold Pulse, or use AI Analysis.'
         : 'Trang này mô tả ngắn gọn dữ liệu Kim Tuyến xử lý khi bạn xem bảng giá, dùng Sổ vàng theo tài khoản, đọc Nhịp vàng hoặc sử dụng Phân tích AI.'}
-      updatedAt="13/09/2026"
+      updatedAt="07/10/2026"
       locale={english ? 'en' : 'vi'}
     >
       <section>
@@ -49,6 +49,11 @@ export default async function PrivacyPage() {
       <section>
         <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '6. Retention and requests' : '6. Lưu trữ và yêu cầu dữ liệu'}</h2>
         <p className="mt-2 text-muted-foreground">{english ? 'Operational records are retained only as long as needed for support, fraud prevention, accounting, and legal obligations. You can clear on-device history, profile, and ledger from the app or browser. To request account deletion or an export of server records, contact us and include the account email; payment records may be retained where law requires.' : 'Dữ liệu vận hành chỉ được lưu trong thời gian cần thiết cho hỗ trợ, phòng chống gian lận, kế toán và nghĩa vụ pháp lý. Bạn có thể xóa lịch sử, hồ sơ và sổ trên thiết bị từ ứng dụng hoặc trình duyệt. Để yêu cầu xóa tài khoản hoặc xuất dữ liệu máy chủ, hãy liên hệ và cung cấp email tài khoản; dữ liệu thanh toán có thể phải lưu theo quy định pháp luật.'}</p>
+      </section>
+      <section>
+        <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? 'Audience measurement' : 'Đo lường độc giả'}</h2>
+        <p className="mt-2 text-muted-foreground">{english ? 'When Google Analytics is enabled, public price, news and guide pages record page views and aggregate engagement. URLs sent to Google exclude query parameters and fragments. Gold Ledger, AI Analysis, account, administration and payment pages are excluded. The service does not send ledger entries, AI questions, account identifiers or payment details to Google Analytics.' : 'Khi bật Google Analytics, các trang bảng giá, tin và hướng dẫn công khai ghi nhận lượt xem và mức tương tác tổng hợp. URL gửi Google không chứa tham số truy vấn hoặc phần sau dấu #. Các trang Sổ vàng, Phân tích AI, tài khoản, quản trị và thanh toán được loại trừ. Dịch vụ không gửi giao dịch Sổ vàng, câu hỏi AI, định danh tài khoản hoặc chi tiết thanh toán vào Google Analytics.'}</p>
+        <p className="mt-2 text-muted-foreground">{english ? 'Aggregate Analytics and Search Console reports help select relevant editorial topics. Google traffic data does not establish the accuracy of market news. Every article still requires source verification and editorial approval.' : 'Báo cáo tổng hợp Analytics và Search Console giúp chọn đề tài phù hợp với độc giả. Dữ liệu truy cập Google không xác nhận độ chính xác của tin thị trường. Bài viết vẫn cần kiểm chứng nguồn và duyệt biên tập.'}</p>
       </section>
       <section>
         <h2 className="font-heading text-lg font-semibold tracking-[-0.03em]">{english ? '7. Contact' : '7. Liên hệ'}</h2>

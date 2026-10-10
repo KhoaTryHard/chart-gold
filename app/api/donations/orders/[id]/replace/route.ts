@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isTrustedOrigin } from '@/lib/server/origin';
 
 import {
   BillingError,
@@ -16,22 +17,12 @@ const bodySchema = z.object({
   displayName: z.string().trim().min(1).max(120),
 });
 
-function sameOrigin(request: Request) {
-  try {
-    const origin = request.headers.get('origin');
-    return Boolean(
-      origin && new URL(origin).origin === new URL(request.url).origin,
-    );
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!sameOrigin(request))
+  if (!isTrustedOrigin(request))
     return Response.json({ error: 'Yêu cầu không hợp lệ.' }, { status: 403 });
   try {
     const { auth } = await import('@/auth');

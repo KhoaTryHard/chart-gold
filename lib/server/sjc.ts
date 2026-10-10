@@ -3,6 +3,7 @@ import {
   marketFetch as fetch,
   marketHistoryDays,
   isAnalysisFetch,
+  recordMarketAdapterFailure,
 } from '@/lib/server/market-fetch';
 
 import fallbackDataset from '@/lib/sjc-data.json';
@@ -326,9 +327,11 @@ async function fetchPhuQuyHistory(
       return toPoint(date, quote.buy, quote.sell);
     }),
   );
-  return responses.flatMap((result) =>
-    result.status === 'fulfilled' ? [result.value] : [],
-  );
+  return responses.flatMap((result) => {
+    if (result.status === 'fulfilled') return [result.value];
+    recordMarketAdapterFailure(result.reason);
+    return [];
+  });
 }
 
 type BtmcHistoryPayload = {
@@ -478,9 +481,11 @@ async function fetchBtmcHistory(product: BtmcProduct, requestedDays?: number): P
       },
     ),
   );
-  return responses.flatMap((result) =>
-    result.status === 'fulfilled' ? [result.value] : [],
-  );
+  return responses.flatMap((result) => {
+    if (result.status === 'fulfilled') return [result.value];
+    recordMarketAdapterFailure(result.reason);
+    return [];
+  });
 }
 
 async function getFirstPartyMarketData(
@@ -497,7 +502,8 @@ async function getFirstPartyMarketData(
   if (view !== 'history') {
     try {
       quote = await fetchQuote();
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
     // A delayed official history point may still be useful when today's quote
     // is temporarily unavailable, so continue with the best-effort history.
     }
@@ -506,7 +512,8 @@ async function getFirstPartyMarketData(
   if (view !== 'quote' && (quote || options.loadHistoryWhenQuoteUnavailable !== false)) {
     try {
       history = await fetchHistory();
-    } catch {
+    } catch (error) {
+      recordMarketAdapterFailure(error);
       // Keep the current quote available even if history cannot be loaded.
     }
   }
@@ -746,6 +753,9 @@ async function getSjcMarketDataInternal(
       : Promise.resolve([]),
   ]);
 
+  for (const result of [officialResult, aggregateResult, productHistoryResult, barHistoryResult]) {
+    if (result.status === 'rejected') recordMarketAdapterFailure(result.reason);
+  }
   const official =
     officialResult.status === 'fulfilled' ? officialResult.value : null;
   const aggregate =
@@ -881,6 +891,9 @@ async function getAggregatedMarketData(
     view === 'history' ? Promise.resolve(null) : fetchAggregatedQuote(product, upstreamCodeOverride),
     view === 'quote' ? Promise.resolve([]) : fetchProductHistory(product, upstreamCodeOverride, options.historyDays),
   ]);
+  for (const result of [quoteResult, historyResult]) {
+    if (result.status === 'rejected') recordMarketAdapterFailure(result.reason);
+  }
   const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
   const history =
     historyResult.status === 'fulfilled' ? historyResult.value : [];

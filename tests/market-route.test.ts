@@ -31,7 +31,11 @@ const liveMarket = {
   generatedAt: '2026-09-09T01:00:00.000Z',
 };
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 describe('market route cache policy', () => {
   it('rejects an unknown company or product instead of silently using SJC', async () => {
@@ -87,5 +91,76 @@ describe('market route cache policy', () => {
       view: 'history',
       historyDays: 7,
     });
+  });
+
+  it('reports old publication age independently of live mode and emits only sanitized metadata', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-10-04T08:30:00Z');
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    mocks.getMarketData.mockResolvedValue({
+      ...liveMarket,
+      generatedAt: '2026-10-04T08:29:00Z',
+      timestampKind: 'source',
+      sourcePublishedAt: '2026-10-03T00:57:00Z',
+      source: { provider: 'secret provider text', url: 'https://example.test/?token=secret', official: true },
+    });
+    mocks.saveMarketQuoteSnapshot.mockResolvedValue(undefined);
+    const response = await GET(new Request('http://localhost/api/sjc?view=quote&token=private'));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ mode: 'live', stale: false, freshness: {
+      evaluatedAt: '2026-10-04T08:30:00.000Z', recordAgeSeconds: 60, sourceAgeSeconds: 113_580,
+    } });
+    const emitted = String(log.mock.calls[0][0]);
+    expect(JSON.parse(emitted)).toMatchObject({ event: 'market_origin', provider: 'sjc-official', networkRequests: 0 });
+    expect(emitted).not.toMatch(/secret|private|token/);
+  });
+
+  it('preserves old snapshot timestamps and HTTP compatibility during a fallback', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-10-04T08:30:00Z');
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.getMarketData.mockResolvedValue({ ...liveMarket, mode: 'unavailable', availability: 'unavailable', latest: null });
+    mocks.getLatestMarketQuoteSnapshot.mockResolvedValue({ market: {
+      ...liveMarket, generatedAt: '2026-10-03T08:30:00Z', timestampKind: 'source', observedAt: '2026-10-03T08:00:00Z',
+    } });
+    const response = await GET(new Request('http://localhost/api/sjc?view=quote'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toContain('s-maxage=30');
+    expect(await response.json()).toMatchObject({
+      mode: 'fallback', availability: 'available', stale: true,
+      fetchedAt: '2026-10-03T08:30:00Z', expiresAt: '2026-10-03T08:34:00.000Z',
+      freshness: { recordAgeSeconds: 86_400, sourceAgeSeconds: 88_200 },
+    });
+    expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({ event: 'market_origin', mode: 'fallback' });
+  });
+
+  it('keeps a usable quote when a provider returns malformed timing metadata', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-10-04T08:30:00Z');
+    mocks.getMarketData.mockResolvedValue({
+      ...liveMarket, fetchedAt: 'invalid', timestampKind: 'source',
+      sourcePublishedAt: '2026-10-05T00:00:00Z',
+    });
+    mocks.saveMarketQuoteSnapshot.mockResolvedValue(undefined);
+    const response = await GET(new Request('http://localhost/api/sjc?view=quote'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      fetchedAt: 'invalid', expiresAt: '2026-10-04T08:34:00.000Z',
+      freshness: { recordAgeSeconds: null, sourceAgeSeconds: null },
+    });
+  });
+
+  it('keeps snapshot and unexpected errors out of logs', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.getMarketData.mockResolvedValue({ ...liveMarket, mode: 'unavailable', availability: 'unavailable', latest: null });
+    mocks.getLatestMarketQuoteSnapshot.mockRejectedValue(new Error('postgres://password@host?token=private'));
+    const response = await GET(new Request('http://localhost/api/sjc?view=quote'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ availability: 'unavailable', stale: true });
+    expect(String(log.mock.calls[0][0])).not.toMatch(/password|token|private/);
+    mocks.getMarketData.mockRejectedValue(new Error('upstream secret'));
+    await expect(GET(new Request('http://localhost/api/sjc?view=quote'))).rejects.toThrow('Market data request failed');
+    expect(String(log.mock.calls.at(-1)?.[0])).not.toContain('secret');
   });
 });

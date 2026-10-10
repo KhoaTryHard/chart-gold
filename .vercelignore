@@ -5,6 +5,7 @@
 dist/
 outputs/
 *.tsbuildinfo
+*.log
 
 # Local QA and documentation are not part of the deployed application
 test-results/

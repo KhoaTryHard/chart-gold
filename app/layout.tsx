@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { AuthSessionProvider } from '@/components/auth/session-provider';
 import { AppShell } from '@/components/app-shell';
 import { LocaleProvider } from '@/components/locale-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SiteFooter } from '@/components/site-footer';
-import { htmlLang, localeCookieName, localeFromValue } from '@/lib/i18n';
+import { GoogleAnalytics } from '@/components/google-analytics';
+import { htmlLang } from '@/lib/i18n';
+import { getRequestLocale } from '@/lib/request-locale';
 import { siteUrl } from '@/lib/seo';
 import './globals.css';
 
@@ -29,6 +32,7 @@ export const metadata: Metadata = {
   applicationName: 'Kim Tuyến',
   authors: [{ name: 'Kim Tuyến' }],
   creator: 'Kim Tuyến',
+  verification: { google: process.env.GOOGLE_SITE_VERIFICATION || undefined },
   publisher: 'Kim Tuyến',
   keywords: [
     'giá vàng hôm nay',
@@ -95,8 +99,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const locale = localeFromValue(cookieStore.get(localeCookieName)?.value);
+  const locale = await getRequestLocale();
 
   return (
     <html lang={htmlLang(locale)} suppressHydrationWarning>
@@ -117,6 +120,9 @@ export default async function RootLayout({
             </AuthSessionProvider>
           </ThemeProvider>
         </LocaleProvider>
+        <SpeedInsights />
+        <Analytics />
+        <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID} />
       </body>
     </html>
   );

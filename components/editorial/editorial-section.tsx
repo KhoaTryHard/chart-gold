@@ -1,12 +1,13 @@
 import { Newspaper } from 'lucide-react';
 import { listPublishedArticles } from '@/lib/editorial/content';
 import type { PublicArticleCard } from '@/lib/editorial/types';
+import { englishEnabled } from '@/lib/i18n';
 import { EditorialHomeClient } from './editorial-home-client';
 
 export async function LatestEditorialSection() {
   const [vietnameseArticles, englishArticles] = await Promise.all([
     listPublishedArticles({ limit: 4, locale: 'vi' }),
-    listPublishedArticles({ limit: 4, locale: 'en' }),
+    englishEnabled ? listPublishedArticles({ limit: 4, locale: 'en' }) : Promise.resolve([]),
   ]);
   return (
     <EditorialHomeClient

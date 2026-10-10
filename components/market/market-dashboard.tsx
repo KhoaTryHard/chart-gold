@@ -63,6 +63,7 @@ import {
 } from '@/components/ui/select';
 import fallbackDataset from '@/lib/sjc-data.json';
 import { createLatestRequestGuard } from '@/lib/latest-request';
+import { formatMarketAge, getMarketFreshness } from '@/lib/market-freshness';
 import {
   PRICE_CHART_RANGES,
   type PriceChartRange,
@@ -113,6 +114,8 @@ type MarketResponse = {
   source: { provider: string; url: string | null; official: boolean };
   historySource: { provider: string; url: string | null };
   fetchedAt?: string;
+  generatedAt?: string;
+  sourcePublishedAt?: string;
   expiresAt?: string;
   stale?: boolean;
 };
@@ -150,7 +153,7 @@ function marketCacheKey(
 
 function MarketSkeleton() {
   return (
-    <div className="space-y-4" aria-label="Đang tải dữ liệu thị trường">
+    <div className="space-y-6" aria-label="Đang tải dữ liệu thị trường">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div
           className="metric-card metric-card--gold metric-card--quote min-h-[291px] sm:col-span-2 sm:min-h-[248px] xl:col-span-2"
@@ -191,7 +194,7 @@ function MarketSkeleton() {
           </div>
         ))}
       </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div
           className="glass-panel min-h-[733px] p-4 sm:p-6 xl:min-h-[701px]"
           aria-hidden="true"
@@ -252,6 +255,7 @@ export default function MarketDashboard({
   const [observedAt, setObservedAt] = useState(
     fallbackDataset.metadata.snapshotTakenAt,
   );
+  const [fetchedAt, setFetchedAt] = useState<string | undefined>();
   const [source, setSource] = useState({
     provider: 'Bản lịch sử dự phòng',
     url: fallbackDataset.metadata.sourceUrl as string | null,
@@ -356,7 +360,10 @@ export default function MarketDashboard({
           activeProductId.current = payload.product.id;
           setCompanyId(payload.company.id);
           setMode(payload.mode);
-          setObservedAt(payload.observedAt);
+          setObservedAt(payload.timestampKind === 'source'
+            ? payload.sourcePublishedAt ?? payload.observedAt
+            : payload.observedAt);
+          setFetchedAt(payload.fetchedAt ?? payload.generatedAt);
           setTimestampKind(payload.timestampKind ?? 'retrieval-or-date');
           setSource(payload.source);
           setHistorySource(payload.historySource);
@@ -435,6 +442,7 @@ export default function MarketDashboard({
             );
             setObservedAt(fallbackDataset.metadata.snapshotTakenAt);
             setTimestampKind('retrieval-or-date');
+            setFetchedAt(undefined);
           }
           setMode('fallback');
         }
@@ -450,6 +458,9 @@ export default function MarketDashboard({
 
   useEffect(() => {
     const clockSync = window.setTimeout(() => setNow(Date.now()), 0);
+    const clockTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    }, 60_000);
     const params = new URLSearchParams(window.location.search);
     if (params.get('ai') === 'open') {
       const requestedCompany = params.get('company');
@@ -467,7 +478,10 @@ export default function MarketDashboard({
           : range;
       router.replace(analysisHref(nextCompany, nextProduct, nextRange));
     }
-    return () => window.clearTimeout(clockSync);
+    return () => {
+      window.clearTimeout(clockSync);
+      window.clearInterval(clockTimer);
+    };
   }, [companyId, range, router]);
 
   useEffect(() => {
@@ -621,33 +635,42 @@ export default function MarketDashboard({
       : false;
   const currentQuote = latestQuote;
   const hasMarketData = Boolean(currentQuote && mode !== 'connecting');
-  const observedDate = new Date(observedAt);
-  const isStale =
-    Number.isFinite(observedDate.getTime()) &&
-    now - observedDate.getTime() > 30 * 60 * 1_000;
-
-  const formatObservedAt = () =>
-    new Intl.DateTimeFormat(english ? 'en-US' : 'vi-VN', {
+  // Recalculate from timestamps on the browser clock: a CDN response may be old.
+  const freshness = getMarketFreshness({ fetchedAt, observedAt, timestampKind }, now);
+  const olderPublication = freshness.sourceAgeSeconds !== null && freshness.sourceAgeSeconds > 30 * 60;
+  const sourceAge = freshness.sourceAgeSeconds !== null
+    ? formatMarketAge(freshness.sourceAgeSeconds, english)
+    : null;
+  const formatTiming = (timestamp: string) => {
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return '—';
+    return new Intl.DateTimeFormat(english ? 'en-US' : 'vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
       month: '2-digit',
-    }).format(observedDate);
+    }).format(date);
+  };
 
   const status =
     mode === 'connecting'
       ? { label: english ? 'Connecting' : 'Đang kết nối', tone: 'bg-amber-500' }
-      : mode === 'live' && !isStale
-        ? { label: english ? 'Updated' : 'Đã cập nhật', tone: 'bg-emerald-500' }
+      : mode === 'live'
+        ? {
+            label: olderPublication
+              ? english ? 'Latest published quote' : 'Giá công bố gần nhất'
+              : english ? 'Data retrieved' : 'Đã lấy dữ liệu',
+            tone: olderPublication ? 'bg-amber-500' : 'bg-emerald-500',
+          }
         : mode === 'unavailable'
           ? {
               label: english ? 'No data' : 'Chưa có dữ liệu',
               tone: 'bg-red-500',
             }
-          : mode === 'live' || mode === 'delayed'
+          : mode === 'delayed'
             ? {
-                label: english ? 'Source delayed' : 'Nguồn đang trễ',
+                label: english ? 'Historical data' : 'Dữ liệu lịch sử',
                 tone: 'bg-amber-500',
               }
             : {
@@ -779,6 +802,7 @@ export default function MarketDashboard({
     <div
       className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
       aria-live="polite"
+      aria-label={english ? 'Price source status' : 'Trạng thái nguồn giá'}
     >
       <span
         className={`size-2 rounded-full ${status.tone}`}
@@ -788,16 +812,19 @@ export default function MarketDashboard({
       {mode !== 'connecting' ? (
         <>
           <span aria-hidden="true">·</span>
-          <span>{formatObservedAt()}</span>
           <span>
             {timestampKind === 'source'
               ? english
-                ? 'source time'
-                : 'giờ nguồn'
+                ? 'Source published'
+                : 'Nguồn công bố'
               : english
-                ? 'retrieval time'
-                : 'giờ lấy dữ liệu'}
+                ? 'Observed'
+                : 'Ghi nhận'}: {formatTiming(observedAt)}
+            {sourceAge ? ` (${sourceAge})` : ''}
           </span>
+          {fetchedAt ? <span>
+            {english ? 'System retrieved' : 'Hệ thống lấy dữ liệu'}: {formatTiming(fetchedAt)}
+          </span> : null}
         </>
       ) : null}
       {hasMarketData ? (
@@ -814,7 +841,7 @@ export default function MarketDashboard({
 
   const quickTools = (
     <section
-      className="mb-6 grid gap-3 sm:grid-cols-3"
+      className="my-6 grid gap-3 sm:grid-cols-3"
       aria-label={english ? 'Quick gold tools' : 'Làm gì tiếp theo'}
     >
       <Link
@@ -961,9 +988,11 @@ export default function MarketDashboard({
           </section>
           {priceStatus}
 
-          {mode !== 'live' || isStale ? (
+          {mode !== 'live' || olderPublication ? (
             <div className="mb-3 flex items-start gap-2 rounded-[16px] border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
-              <WifiOff className="mt-0.5 size-3.5 shrink-0" />
+              {mode === 'live'
+                ? <Info className="mt-0.5 size-3.5 shrink-0" />
+                : <WifiOff className="mt-0.5 size-3.5 shrink-0" />}
               {mode === 'connecting'
                 ? english
                   ? 'Connecting to the market-price source…'
@@ -977,9 +1006,11 @@ export default function MarketDashboard({
                     ? english
                       ? 'The live source is temporarily unavailable. The latest historical snapshot is shown and is not treated as a current price.'
                       : 'Nguồn trực tiếp tạm thời không phản hồi. Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.'
-                    : english
-                      ? 'The price source is updating more slowly than usual. Check again before trading.'
-                      : 'Nguồn giá đang cập nhật chậm hơn bình thường. Hãy đối chiếu lại trước khi giao dịch.'}
+                    : mode === 'delayed'
+                      ? english ? 'Showing the latest available historical data.' : 'Đang hiển thị dữ liệu lịch sử gần nhất.'
+                      : english
+                        ? `The source published this quote ${sourceAge}. Check the publication time before trading.`
+                        : `Nguồn công bố giá này ${sourceAge}. Hãy đối chiếu thời điểm công bố trước khi giao dịch.`}
             </div>
           ) : null}
 

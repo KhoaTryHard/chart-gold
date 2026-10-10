@@ -12,6 +12,11 @@ import { setRevisionCoverImage } from '@/lib/editorial/admin';
 import { storeEditorialImageUpload } from '@/lib/editorial/images';
 import { isTrustedOrigin } from '@/lib/server/origin';
 import type { EditorialCategory } from '@/lib/editorial/types';
+import {
+  assertRevisionVersion,
+  EditorialStateError,
+} from '@/lib/editorial/review';
+import { getAdminRevision } from '@/lib/editorial/admin-read';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,6 +30,8 @@ function textField(form: FormData, name: string) {
 }
 
 function errorResponse(error: unknown) {
+  if (error instanceof EditorialStateError)
+    return Response.json({ error: error.message }, { status: error.status });
   if (error instanceof EditorialAuthError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
@@ -45,9 +52,11 @@ export async function POST(
     const { id: articleId } = await context.params;
     const form = await request.formData();
     const revisionId = textField(form, 'revisionId');
+    const version = textField(form, 'version');
     const source = textField(form, 'source');
     if (
       !revisionId ||
+      version.length !== 64 ||
       (source !== 'brand-library' && source !== 'admin-upload')
     ) {
       return Response.json(
@@ -71,6 +80,7 @@ export async function POST(
         { status: 404 },
       );
     }
+    assertRevisionVersion(revision, version);
     if (
       revision.approvalStatus === 'approved' ||
       revision.status === 'published'
@@ -88,13 +98,16 @@ export async function POST(
       const updated = await setRevisionCoverImage({
         articleId,
         revisionId,
+        version,
         url: cover.url,
         alt: textField(form, 'alt') || cover.alt,
         disclosure: cover.disclosure,
         provider: 'brand-library',
         model: cover.version,
       });
-      return Response.json({ revision: updated });
+      return Response.json({
+        item: await getAdminRevision(articleId, updated.id),
+      });
     }
 
     const file = form.get('file');
@@ -136,6 +149,7 @@ export async function POST(
       const updated = await setRevisionCoverImage({
         articleId,
         revisionId,
+        version,
         url: `/api/editorial/media/${revisionId}`,
         storageKey: stored.pathname,
         alt: textField(form, 'alt') || revision.coverAlt || revision.title,
@@ -143,7 +157,9 @@ export async function POST(
         provider: 'admin-upload',
         model: 'webp-1200x675',
       });
-      return Response.json({ revision: updated });
+      return Response.json({
+        item: await getAdminRevision(articleId, updated.id),
+      });
     } catch (error) {
       await del(stored.url).catch(() => undefined);
       throw error;

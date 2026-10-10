@@ -1,9 +1,30 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { marketFailureKind } from '@/lib/server/market-telemetry';
+
+export type MarketFetchDiagnostics = {
+  networkRequests: number;
+  cacheHits: number;
+  deduplicatedRequests: number;
+  upstreamHttpErrors: Record<string, number>;
+  failures: Record<string, number>;
+};
+
+export function createMarketFetchDiagnostics(): MarketFetchDiagnostics {
+  return {
+    networkRequests: 0,
+    cacheHits: 0,
+    deduplicatedRequests: 0,
+    upstreamHttpErrors: {},
+    failures: {},
+  };
+}
 
 type Context = {
   signal: AbortSignal;
   historyDays: number;
   responses: Map<string, Promise<Response>>;
+  diagnostics?: MarketFetchDiagnostics;
+  reportedErrors: WeakSet<object>;
 };
 const context = new AsyncLocalStorage<Context>();
 const cache = new Map<
@@ -22,8 +43,26 @@ export function withMarketFetch<T>(
   signal: AbortSignal,
   historyDays: number,
   work: () => Promise<T>,
+  diagnostics?: MarketFetchDiagnostics,
 ) {
-  return context.run({ signal, historyDays, responses: new Map() }, work);
+  return context.run({ signal, historyDays, responses: new Map(), diagnostics, reportedErrors: new WeakSet() }, work);
+}
+
+/** Record caught adapter errors without serializing upstream messages or payloads. */
+export function recordMarketAdapterFailure(error: unknown) {
+  recordFailure(error, 'adapter_error');
+}
+
+function recordFailure(error: unknown, fallback: 'adapter_error' | 'network_error') {
+  const active = context.getStore();
+  if (!active?.diagnostics) return;
+  if (error && typeof error === 'object') {
+    if (active.reportedErrors.has(error)) return;
+    active.reportedErrors.add(error);
+  }
+  const kind = marketFailureKind(error);
+  const category = kind === 'operation_failed' ? fallback : kind;
+  active.diagnostics.failures[category] = (active.diagnostics.failures[category] ?? 0) + 1;
 }
 
 export function abortable<T>(
@@ -91,13 +130,18 @@ export async function marketFetch(
     typeof init.body === 'string' ? init.body : '',
   ]);
   const saved = cache.get(key);
-  if (saved && saved.until > Date.now())
+  if (saved && saved.until > Date.now()) {
+    if (active.diagnostics) active.diagnostics.cacheHits++;
     return new Response(saved.body, {
       status: saved.status,
       headers: saved.headers,
     });
+  }
   const existing = active.responses.get(key);
-  if (existing) return (await abortable(existing, active.signal)).clone();
+  if (existing) {
+    if (active.diagnostics) active.diagnostics.deduplicatedRequests++;
+    return (await abortable(existing, active.signal)).clone();
+  }
   const pending = fetchWithLimit(url, init, active.signal, async (response) => {
     const body = await response.text();
     if (body.length > 8_000_000) throw new Error('Market response too large');
@@ -135,17 +179,27 @@ async function fetchWithLimit(
   parentSignal: AbortSignal,
   consume?: (response: Response) => Promise<Response>,
 ) {
-  const release = await acquire(new URL(url).host, parentSignal);
+  let release: (() => void) | undefined;
   try {
+    release = await acquire(new URL(url).host, parentSignal);
     parentSignal.throwIfAborted();
     // Timeout starts after acquiring the slot, not while waiting in the queue.
     const signal = AbortSignal.any([
       parentSignal,
       AbortSignal.timeout(7_000),
     ]);
+    const diagnostics = context.getStore()?.diagnostics;
+    if (diagnostics) diagnostics.networkRequests++;
     const response = await fetch(url, { ...init, signal });
-    return consume ? consume(response) : response;
+    if (!response.ok && diagnostics) {
+      const status = String(response.status);
+      diagnostics.upstreamHttpErrors[status] = (diagnostics.upstreamHttpErrors[status] ?? 0) + 1;
+    }
+    return consume ? await consume(response) : response;
+  } catch (error) {
+    recordFailure(error, 'network_error');
+    throw error;
   } finally {
-    release();
+    release?.();
   }
 }
