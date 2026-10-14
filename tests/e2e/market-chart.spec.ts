@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/market-candles?*', (route) => {
+    const query = new URL(route.request().url()).searchParams;
+    return route.fulfill({
+      json: {
+        companyId: query.get('company'),
+        productId: query.get('product'),
+        range: query.get('range'),
+        status: 'unsupported',
+        records: [],
+        source: null,
+      },
+    });
+  });
+});
+
 const company = {
   id: 'sjc',
   name: 'SJC',
@@ -84,17 +100,27 @@ const quoteResponse = {
   source: { provider: 'SJC', url: 'https://sjc.com.vn', official: true },
 };
 
-test('separates Sunday retrieval from Saturday publication without assuming a source outage', async ({ page }) => {
+test('separates Sunday retrieval from Saturday publication without assuming a source outage', async ({
+  page,
+}) => {
   await page.clock.setFixedTime(new Date('2026-10-04T08:30:00Z'));
-  await page.route('**/api/sjc?*', (route) => route.fulfill({ json: {
-    ...quoteResponse,
-    timestampKind: 'source',
-    observedAt: '2026-10-03T00:57:00Z',
-    sourcePublishedAt: '2026-10-03T00:57:00Z',
-    fetchedAt: '2026-10-04T08:29:00Z',
-    // Deliberately stale computed metadata: UI must use timestamps instead.
-    freshness: { evaluatedAt: '2026-10-03T00:57:00Z', recordAgeSeconds: 0, sourceAgeSeconds: 0 },
-  } }));
+  await page.route('**/api/sjc?*', (route) =>
+    route.fulfill({
+      json: {
+        ...quoteResponse,
+        timestampKind: 'source',
+        observedAt: '2026-10-03T00:57:00Z',
+        sourcePublishedAt: '2026-10-03T00:57:00Z',
+        fetchedAt: '2026-10-04T08:29:00Z',
+        // Deliberately stale computed metadata: UI must use timestamps instead.
+        freshness: {
+          evaluatedAt: '2026-10-03T00:57:00Z',
+          recordAgeSeconds: 0,
+          sourceAgeSeconds: 0,
+        },
+      },
+    }),
+  );
   await page.goto('/');
   const status = page.getByLabel('Trạng thái nguồn giá');
   await expect(status).toContainText('Giá công bố gần nhất');
@@ -103,14 +129,26 @@ test('separates Sunday retrieval from Saturday publication without assuming a so
   await expect(status).toContainText('Hệ thống lấy dữ liệu');
   await expect(status).toContainText(/03[/-]10/);
   await expect(status).toContainText(/04[/-]10/);
-  await expect(page.getByText('Nguồn đang trễ', { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Nguồn giá đang cập nhật chậm hơn bình thường/)).toHaveCount(0);
+  await expect(page.getByText('Nguồn đang trễ', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText(/Nguồn giá đang cập nhật chậm hơn bình thường/),
+  ).toHaveCount(0);
 });
 
-test('does not label retrieval-only time as source publication', async ({ page }) => {
-  await page.route('**/api/sjc?*', (route) => route.fulfill({ json: {
-    ...quoteResponse, timestampKind: 'retrieval-or-date', fetchedAt: quoteResponse.generatedAt,
-  } }));
+test('does not label retrieval-only time as source publication', async ({
+  page,
+}) => {
+  await page.route('**/api/sjc?*', (route) =>
+    route.fulfill({
+      json: {
+        ...quoteResponse,
+        timestampKind: 'retrieval-or-date',
+        fetchedAt: quoteResponse.generatedAt,
+      },
+    }),
+  );
   await page.goto('/');
   const status = page.getByLabel('Trạng thái nguồn giá');
   await expect(status).toContainText('Ghi nhận');
@@ -118,7 +156,9 @@ test('does not label retrieval-only time as source publication', async ({ page }
   await expect(status).not.toContainText('Nguồn công bố');
 });
 
-test('explains the price page before the picker and updates prices and chart units together', async ({ page }) => {
+test('explains the price page before the picker and updates prices and chart units together', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/sjc?*', (route) =>
     route.fulfill({ json: historyResponse }),
@@ -126,21 +166,34 @@ test('explains the price page before the picker and updates prices and chart uni
   await page.goto('/');
 
   const dashboard = page.locator('.market-main:visible').first();
-  const title = dashboard.getByRole('heading', { name: 'Giá vàng hôm nay', exact: true });
+  const title = dashboard.getByRole('heading', {
+    name: 'Giá vàng hôm nay',
+    exact: true,
+  });
   const picker = dashboard.locator('.market-selection:visible');
   await expect(title).toBeVisible();
-  await expect(dashboard.locator('.market-intro p').first()).toContainText('Xem số tiền bạn cần trả khi mua và khoản có thể nhận khi bán.');
-  const titleTop = await title.evaluate((element) => element.getBoundingClientRect().top);
-  const pickerTop = await picker.evaluate((element) => element.getBoundingClientRect().top);
+  await expect(dashboard.locator('.market-intro p').first()).toContainText(
+    'Xem số tiền bạn cần trả khi mua và khoản có thể nhận khi bán.',
+  );
+  const titleTop = await title.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  const pickerTop = await picker.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
   expect(titleTop).toBeLessThan(pickerTop);
-  await expect(dashboard.locator('.metric-card--quote .metric-value__unit').first()).toHaveText('đ / lượng');
+  await expect(
+    dashboard.locator('.metric-card--quote .metric-value__unit').first(),
+  ).toHaveText('đ / lượng');
 
   await dashboard.getByRole('button', { name: 'Chỉ', exact: true }).click();
-  await expect(dashboard.locator('.metric-card--quote .metric-value__unit').first()).toHaveText('đ / chỉ');
-  const chart = dashboard.locator('.glass-panel:visible').filter({
-    has: page.getByRole('heading', { name: /Biểu đồ giá/ }),
-  });
-  await expect(chart.getByText('triệu đồng / chỉ', { exact: false })).toBeVisible();
+  await expect(
+    dashboard.locator('.metric-card--quote .metric-value__unit').first(),
+  ).toHaveText('đ / chỉ');
+  const chart = dashboard.getByTestId('domestic-chart');
+  await expect(
+    chart.getByText('triệu đồng / chỉ', { exact: false }).first(),
+  ).toBeVisible();
 });
 
 test('keeps one-month history after a delayed quote response arrives', async ({

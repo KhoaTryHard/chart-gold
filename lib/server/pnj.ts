@@ -237,11 +237,11 @@ async function fetchPnjCurrentQuote(product: PnjProduct): Promise<LiveQuote> {
   );
 }
 
-export async function fetchPnjHistoryPayload(date: string) {
+export async function fetchPnjHistoryPayload(date: string, reuseInFlight = false) {
   const cached = historyCache.get(date);
   if (cached && cached.expiresAt > Date.now()) return cached.payload;
   const existing = historyInFlight.get(date);
-  if (existing && !isAnalysisFetch()) return existing;
+  if (existing && (reuseInFlight || !isAnalysisFetch())) return existing;
 
   const dateToken = date.replace(/-/g, '');
   const url = `${PNJ_GOLD_HISTORY_URL}?date=${encodeURIComponent(dateToken)}`;

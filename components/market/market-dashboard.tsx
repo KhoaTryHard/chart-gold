@@ -43,11 +43,11 @@ const PriceChart = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="glass-panel min-h-[733px] p-5 sm:p-6 xl:min-h-[701px]"
+        className="mt-8 min-h-[650px] space-y-4"
         aria-label="Đang tải biểu đồ"
       >
         <span className="ui-skeleton block h-5 w-48" />
-        <span className="ui-skeleton mt-4 block h-[288px] w-full sm:h-[378px]" />
+        <span className="ui-skeleton mt-4 block h-[480px] w-full rounded-[20px] lg:h-[680px]" />
       </div>
     ),
   },
@@ -72,14 +72,12 @@ import {
 import {
   filterRecordsByCalendarWindow,
   mergeRecordsByDate,
-  type MarketHistoryResponse,
 } from '@/lib/market-history';
 import { DEFAULT_SJC_PRODUCT_ID, getSjcProduct } from '@/lib/sjc-products';
 import { COMPARISON_SETS } from '@/lib/comparison-catalog';
 import {
   getMarketCompany,
   getMarketProductCategory,
-  getMarketHistoryCapability,
   getMarketProduct,
   getMarketProducts,
   isMarketProductSelectable,
@@ -94,13 +92,8 @@ import {
   type MarketProductId,
 } from '@/lib/market-sources';
 
-type Range = PriceChartRange;
+type Range = Exclude<PriceChartRange, '1N'>;
 type DataMode = 'connecting' | 'live' | 'delayed' | 'fallback' | 'unavailable';
-type AnnualHistoryState = {
-  key: string;
-  data: MarketHistoryResponse | null;
-  error: string | null;
-};
 type MarketResponse = {
   mode: Exclude<DataMode, 'connecting'>;
   product: MarketProduct;
@@ -136,7 +129,7 @@ function displayUnitLabel(unit: DisplayUnit, english: boolean) {
   return english ? 'VND / lượng' : 'đ / lượng';
 }
 
-const ranges = PRICE_CHART_RANGES;
+const ranges = PRICE_CHART_RANGES.filter((item) => item.value !== '1N');
 const fallbackRecords = fallbackDataset.records as PricePoint[];
 const MARKET_CLIENT_TTL_MS = 4 * 60 * 1_000;
 const marketResponseCache = new Map<
@@ -194,33 +187,14 @@ function MarketSkeleton() {
           </div>
         ))}
       </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div
-          className="glass-panel min-h-[733px] p-4 sm:p-6 xl:min-h-[701px]"
-          aria-hidden="true"
-        >
-          <span className="ui-skeleton block h-5 w-48" />
-          <span className="ui-skeleton mt-4 block h-4 w-64" />
-          <span className="ui-skeleton mt-3 block h-4 w-52" />
-          <span className="ui-skeleton mt-7 block h-[288px] w-full sm:h-[378px]" />
-          <span className="ui-skeleton mt-6 block h-4 w-60" />
+      <div className="space-y-4" aria-hidden="true">
+        <span className="ui-skeleton block h-4 w-48" />
+        <span className="ui-skeleton block h-8 w-64" />
+        <div className="rounded-[20px] border border-border bg-[var(--surface-solid)] p-4">
+          <span className="ui-skeleton block h-11 w-64" />
+          <span className="ui-skeleton mt-4 block h-[360px] w-full sm:h-[480px] lg:h-[560px]" />
         </div>
-        <aside
-          className="glass-panel min-h-[469px] p-5 sm:p-6"
-          aria-hidden="true"
-        >
-          <span className="ui-skeleton size-10" />
-          <span className="ui-skeleton mt-8 block h-4 w-32" />
-          <span className="ui-skeleton mt-3 block h-6 w-full" />
-          <span className="ui-skeleton mt-2 block h-6 w-4/5" />
-          <span className="ui-skeleton mt-4 block h-4 w-full" />
-          <span className="ui-skeleton mt-2 block h-4 w-3/4" />
-          <span className="ui-skeleton mt-8 block h-px w-full" />
-          <span className="ui-skeleton mt-5 block h-4 w-40" />
-          <span className="ui-skeleton mt-3 block h-2 w-full" />
-          <span className="ui-skeleton mt-5 block h-4 w-36" />
-          <span className="ui-skeleton mt-8 block h-10 w-full" />
-        </aside>
+        <span className="ui-skeleton block h-24 w-full" />
       </div>
     </div>
   );
@@ -248,9 +222,6 @@ export default function MarketDashboard({
   const activeCompanyId = useRef<MarketCompanyId>('sjc');
   const activeProductId = useRef<MarketProductId>(DEFAULT_SJC_PRODUCT_ID);
   const [records, setRecords] = useState<PricePoint[]>(fallbackRecords);
-  const [annualHistory, setAnnualHistory] = useState<AnnualHistoryState | null>(
-    null,
-  );
   const [mode, setMode] = useState<DataMode>('connecting');
   const [observedAt, setObservedAt] = useState(
     fallbackDataset.metadata.snapshotTakenAt,
@@ -269,7 +240,6 @@ export default function MarketDashboard({
     null,
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [shouldAnimateChart, setShouldAnimateChart] = useState(false);
   const [requestGuard] = useState(() => createLatestRequestGuard());
   // Keep the first render deterministic for SSR; sync the clock after hydration.
   const [now, setNow] = useState(0);
@@ -328,11 +298,6 @@ export default function MarketDashboard({
     requestControllerRef.current?.abort();
   }, [requestGuard]);
 
-  const triggerChartAnimation = useCallback(() => {
-    setShouldAnimateChart(true);
-    window.setTimeout(() => setShouldAnimateChart(false), 220);
-  }, []);
-
   const refreshPrices = useCallback(
     async (
       requestedCompanyId: MarketCompanyId,
@@ -360,9 +325,11 @@ export default function MarketDashboard({
           activeProductId.current = payload.product.id;
           setCompanyId(payload.company.id);
           setMode(payload.mode);
-          setObservedAt(payload.timestampKind === 'source'
-            ? payload.sourcePublishedAt ?? payload.observedAt
-            : payload.observedAt);
+          setObservedAt(
+            payload.timestampKind === 'source'
+              ? (payload.sourcePublishedAt ?? payload.observedAt)
+              : payload.observedAt,
+          );
           setFetchedAt(payload.fetchedAt ?? payload.generatedAt);
           setTimestampKind(payload.timestampKind ?? 'retrieval-or-date');
           setSource(payload.source);
@@ -474,7 +441,7 @@ export default function MarketDashboard({
         params.get('range') === '7N' ||
         params.get('range') === '1N' ||
         params.get('range') === '1T'
-          ? (params.get('range') as Range)
+          ? (params.get('range') as PriceChartRange)
           : range;
       router.replace(analysisHref(nextCompany, nextProduct, nextRange));
     }
@@ -534,51 +501,7 @@ export default function MarketDashboard({
       )
     : false;
   const productGroups = [...new Set(currentProducts.map((item) => item.group))];
-  const annualHistoryKey = `${companyId}:${productId}`;
-  const annualCapability = getMarketHistoryCapability(companyId, productId);
-  const matchingAnnualHistory =
-    annualHistory?.key === annualHistoryKey ? annualHistory : null;
-  const annualLoading =
-    range === '1N' &&
-    annualCapability === 'annual' &&
-    matchingAnnualHistory === null;
-
   useEffect(() => {
-    if (range !== '1N' || annualCapability !== 'annual') return;
-    const controller = new AbortController();
-    const requestKey = annualHistoryKey;
-    void fetch(
-      `/api/market-history?${new URLSearchParams({
-        company: companyId,
-        product: productId,
-        range: '1N',
-      })}`,
-      { cache: 'default', signal: controller.signal },
-    )
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Không thể tải lịch sử năm.');
-        return (await response.json()) as MarketHistoryResponse;
-      })
-      .then((data) => {
-        if (!controller.signal.aborted)
-          setAnnualHistory({ key: requestKey, data, error: null });
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted)
-          setAnnualHistory({
-            key: requestKey,
-            data: null,
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Không thể tải lịch sử năm.',
-          });
-      });
-    return () => controller.abort();
-  }, [annualCapability, annualHistoryKey, companyId, productId, range]);
-
-  useEffect(() => {
-    if (range === '1N') return;
     const controller = new AbortController();
     void fetch(
       `/api/sjc?${new URLSearchParams({
@@ -608,14 +531,8 @@ export default function MarketDashboard({
     () => filterRecordsByCalendarWindow(records, selectedRange.days),
     [records, selectedRange.days],
   );
-  const annualData = matchingAnnualHistory?.data
-    ? mergeRecordsByDate(matchingAnnualHistory.data.records, rollingData)
-    : rollingData;
-  const data = range === '1N' ? annualData : rollingData;
-  const displayedHistorySource =
-    range === '1N' && matchingAnnualHistory?.data?.source
-      ? matchingAnnualHistory.data.source
-      : historySource;
+  const data = rollingData;
+  const displayedHistorySource = historySource;
   const first = data[0] ?? null;
   const latestPoint = data.at(-1) ?? null;
   const previousPoint = data.at(-2) ?? latestPoint;
@@ -636,11 +553,16 @@ export default function MarketDashboard({
   const currentQuote = latestQuote;
   const hasMarketData = Boolean(currentQuote && mode !== 'connecting');
   // Recalculate from timestamps on the browser clock: a CDN response may be old.
-  const freshness = getMarketFreshness({ fetchedAt, observedAt, timestampKind }, now);
-  const olderPublication = freshness.sourceAgeSeconds !== null && freshness.sourceAgeSeconds > 30 * 60;
-  const sourceAge = freshness.sourceAgeSeconds !== null
-    ? formatMarketAge(freshness.sourceAgeSeconds, english)
-    : null;
+  const freshness = getMarketFreshness(
+    { fetchedAt, observedAt, timestampKind },
+    now,
+  );
+  const olderPublication =
+    freshness.sourceAgeSeconds !== null && freshness.sourceAgeSeconds > 30 * 60;
+  const sourceAge =
+    freshness.sourceAgeSeconds !== null
+      ? formatMarketAge(freshness.sourceAgeSeconds, english)
+      : null;
   const formatTiming = (timestamp: string) => {
     const date = new Date(timestamp);
     if (!Number.isFinite(date.getTime())) return '—';
@@ -659,8 +581,12 @@ export default function MarketDashboard({
       : mode === 'live'
         ? {
             label: olderPublication
-              ? english ? 'Latest published quote' : 'Giá công bố gần nhất'
-              : english ? 'Data retrieved' : 'Đã lấy dữ liệu',
+              ? english
+                ? 'Latest published quote'
+                : 'Giá công bố gần nhất'
+              : english
+                ? 'Data retrieved'
+                : 'Đã lấy dữ liệu',
             tone: olderPublication ? 'bg-amber-500' : 'bg-emerald-500',
           }
         : mode === 'unavailable'
@@ -692,7 +618,6 @@ export default function MarketDashboard({
             if (!value) return;
             const nextCompanyId = value as MarketCompanyId;
             const nextProduct = getMarketProduct(nextCompanyId, null);
-            triggerChartAnimation();
             invalidatePendingMarketRequest();
             setRecords([]);
             setLatestQuote(null);
@@ -702,13 +627,6 @@ export default function MarketDashboard({
             setCompanyId(nextCompanyId);
             setProductId(nextProduct.id);
             setProduct(nextProduct);
-            if (
-              range === '1N' &&
-              getMarketHistoryCapability(nextCompanyId, nextProduct.id) !==
-                'annual'
-            ) {
-              setRange('1T');
-            }
           }}
         >
           <SelectTrigger
@@ -738,7 +656,6 @@ export default function MarketDashboard({
           onValueChange={(value) => {
             if (!value) return;
             const nextProductId = value as MarketProductId;
-            triggerChartAnimation();
             invalidatePendingMarketRequest();
             setRecords([]);
             setLatestQuote(null);
@@ -747,12 +664,6 @@ export default function MarketDashboard({
             setUnavailableReason(null);
             setProductId(nextProductId);
             setProduct(getMarketProduct(companyId, nextProductId));
-            if (
-              range === '1N' &&
-              getMarketHistoryCapability(companyId, nextProductId) !== 'annual'
-            ) {
-              setRange('1T');
-            }
           }}
         >
           <SelectTrigger
@@ -819,12 +730,16 @@ export default function MarketDashboard({
                 : 'Nguồn công bố'
               : english
                 ? 'Observed'
-                : 'Ghi nhận'}: {formatTiming(observedAt)}
+                : 'Ghi nhận'}
+            : {formatTiming(observedAt)}
             {sourceAge ? ` (${sourceAge})` : ''}
           </span>
-          {fetchedAt ? <span>
-            {english ? 'System retrieved' : 'Hệ thống lấy dữ liệu'}: {formatTiming(fetchedAt)}
-          </span> : null}
+          {fetchedAt ? (
+            <span>
+              {english ? 'System retrieved' : 'Hệ thống lấy dữ liệu'}:{' '}
+              {formatTiming(fetchedAt)}
+            </span>
+          ) : null}
         </>
       ) : null}
       {hasMarketData ? (
@@ -990,9 +905,11 @@ export default function MarketDashboard({
 
           {mode !== 'live' || olderPublication ? (
             <div className="mb-3 flex items-start gap-2 rounded-[16px] border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
-              {mode === 'live'
-                ? <Info className="mt-0.5 size-3.5 shrink-0" />
-                : <WifiOff className="mt-0.5 size-3.5 shrink-0" />}
+              {mode === 'live' ? (
+                <Info className="mt-0.5 size-3.5 shrink-0" />
+              ) : (
+                <WifiOff className="mt-0.5 size-3.5 shrink-0" />
+              )}
               {mode === 'connecting'
                 ? english
                   ? 'Connecting to the market-price source…'
@@ -1007,7 +924,9 @@ export default function MarketDashboard({
                       ? 'The live source is temporarily unavailable. The latest historical snapshot is shown and is not treated as a current price.'
                       : 'Nguồn trực tiếp tạm thời không phản hồi. Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.'
                     : mode === 'delayed'
-                      ? english ? 'Showing the latest available historical data.' : 'Đang hiển thị dữ liệu lịch sử gần nhất.'
+                      ? english
+                        ? 'Showing the latest available historical data.'
+                        : 'Đang hiển thị dữ liệu lịch sử gần nhất.'
                       : english
                         ? `The source published this quote ${sourceAge}. Check the publication time before trading.`
                         : `Nguồn công bố giá này ${sourceAge}. Hãy đối chiếu thời điểm công bố trước khi giao dịch.`}
@@ -1131,109 +1050,25 @@ export default function MarketDashboard({
 
               {quickTools}
 
-              <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <PriceChart
-                  key={`${companyId}-${productId}`}
-                  data={data}
-                  productLabel={displayedProduct.shortLabel}
-                  rangeLabel={
-                    english
-                      ? { '7N': '7 days', '1T': '1 month', '1N': '1 year' }[
-                          range
-                        ]
-                      : selectedRange.label
-                  }
-                  range={range}
-                  locale={locale}
-                  displayUnit={displayUnit}
-                  annualHistory={
-                    range === '1N' ? matchingAnnualHistory?.data : null
-                  }
-                  annualCapability={annualCapability}
-                  annualLoading={annualLoading}
-                  annualError={matchingAnnualHistory?.error}
-                  onRangeChange={(nextRange) => {
-                    if (nextRange !== range) triggerChartAnimation();
-                    setRange(nextRange);
-                  }}
-                  animate={shouldAnimateChart}
-                />
-
-                <aside className="glass-panel glass-panel--forest p-5 sm:p-6">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-                    <Sparkles className="size-[18px] text-primary" />
-                  </div>
-                  <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                    {english ? 'Trend summary' : 'Tóm tắt xu hướng'}
-                  </p>
-                  <h2 className="mt-2 font-heading text-2xl font-semibold leading-tight tracking-[-0.04em]">
-                    {english ? (
-                      `Price is ${isUptrend ? 'above' : 'below'} the ${
-                        { '7N': '7-day', '1T': 'one-month', '1N': 'one-year' }[
-                          range
-                        ]
-                      } average.`
-                    ) : (
-                      <>
-                        Giá đang ở {isUptrend ? 'trên' : 'dưới'} mức bình quân{' '}
-                        {selectedRange.label}.
-                      </>
-                    )}
-                  </h2>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {change >= 0
-                      ? english
-                        ? 'The sell price is higher than at the start of this period. Check the amount a dealer buys back before deciding.'
-                        : 'Giá bán ra cao hơn đầu kỳ đã chọn. Hãy xem cả số tiền cửa hàng mua lại trước khi quyết định.'
-                      : english
-                        ? 'The sell price is lower than at the start of this period. Check more data before deciding.'
-                        : 'Giá bán ra thấp hơn đầu kỳ đã chọn. Hãy xem thêm dữ liệu trước khi quyết định.'}
-                  </p>
-                  <div className="mt-8 space-y-3 border-t border-white/10 pt-5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        {english
-                          ? 'Change in selected period'
-                          : 'Thay đổi trong thời gian đang xem'}
-                      </span>
-                      <b>
-                        {percent >= 0 ? '+' : ''}
-                        {percent.toFixed(1)}%
-                      </b>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <span
-                        className="block h-full rounded-full bg-primary"
-                        style={{
-                          width: `${Math.min(100, Math.max(12, 50 + percent * 2))}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="flex justify-between pt-1">
-                      <span className="text-muted-foreground">
-                        {english
-                          ? 'Average sell price'
-                          : 'Giá bán ra bình quân'}
-                      </span>
-                      <b>
-                        {average === null
-                          ? '—'
-                          : (
-                              average / (displayUnit === 'chi' ? 10 : 1)
-                            ).toFixed(1)}{' '}
-                        {english ? 'million' : 'triệu'} /{' '}
-                        {displayUnit === 'chi' ? 'chỉ' : 'lượng'}
-                      </b>
-                    </div>
-                  </div>
-                  <p className="mt-8 flex items-start gap-2 text-[10px] leading-4 text-muted-foreground">
-                    <Info className="mt-0.5 size-3 shrink-0" />
-                    {english
-                      ? 'Prices are listed per lượng. An actual product can include fabrication fees; check the dealer’s official table before trading.'
-                      : 'Giá niêm yết theo lượng; sản phẩm thực tế có thể thêm phí gia công. Hãy đối chiếu bảng giá chính thức của thương hiệu trước giao dịch.'}
-                  </p>
-                </aside>
-              </section>
+              <PriceChart
+                key={`${companyId}-${productId}`}
+                companyId={companyId}
+                productId={productId}
+                data={data}
+                productLabel={displayedProduct.shortLabel}
+                rangeLabel={
+                  english
+                    ? range === '7N'
+                      ? '7 days'
+                      : '1 month'
+                    : selectedRange.label
+                }
+                range={range}
+                locale={locale}
+                displayUnit={displayUnit}
+                historySource={displayedHistorySource}
+                onRangeChange={setRange}
+              />
             </>
           ) : mode === 'connecting' ? (
             <MarketSkeleton />
