@@ -76,6 +76,7 @@ import {
 } from '@/lib/portfolio-market-quote';
 
 const EMPTY_LEDGER: PortfolioLedger = { version: 1, transactions: [] };
+const ledgerBackupEnabled = false;
 type GoldUnit = 'luong' | 'chi';
 type DraftPriceMode = 'empty' | 'manual' | 'listed';
 
@@ -930,8 +931,8 @@ export function PortfolioPageContent() {
         </h1>
         <p className="tool-description">
           {english
-            ? 'Record real buy and sell transactions, see your holdings valued at dealer buyback prices, and keep a backup on this device.'
-            : 'Ghi lại giao dịch mua bán thực tế, xem tài sản theo giá cửa hàng mua lại và chủ động sao lưu trên tài khoản của bạn.'}
+            ? 'Record real buy and sell transactions and see your holdings valued at dealer buyback prices.'
+            : 'Ghi lại giao dịch mua bán thực tế và xem tài sản theo giá cửa hàng mua lại.'}
         </p>
       </div>
 
@@ -1555,8 +1556,8 @@ export function PortfolioPageContent() {
         {!ledger.transactions.length ? (
           <p className="mt-5 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
             {english
-              ? 'No transactions yet. Add your first purchase above or restore a backup below.'
-              : 'Chưa có giao dịch. Hãy thêm lần mua đầu tiên ở trên hoặc khôi phục bản sao lưu bên dưới.'}
+              ? 'No transactions yet. Add your first purchase above.'
+              : 'Chưa có giao dịch. Hãy thêm lần mua đầu tiên ở trên.'}
           </p>
         ) : !visibleTransactions.length ? (
           <p className="mt-5 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
@@ -1686,7 +1687,7 @@ export function PortfolioPageContent() {
           </div>
         </section>
       ) : null}
-      {hydrated ? (
+      {ledgerBackupEnabled && hydrated ? (
         <LedgerBackup
           account={account}
           ledger={ledger}
@@ -1694,9 +1695,7 @@ export function PortfolioPageContent() {
           locale={locale}
           onChange={handleImportedLedger}
         />
-      ) : (
-        <div className="h-16" aria-hidden="true" />
-      )}
+      ) : null}
       <AlertDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {

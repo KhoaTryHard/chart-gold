@@ -175,7 +175,7 @@ test('records, edits, filters, and deletes an account ledger transaction', async
     .click();
   await expect(
     page.getByText(
-      'Chưa có giao dịch. Hãy thêm lần mua đầu tiên ở trên hoặc khôi phục bản sao lưu bên dưới.',
+      'Chưa có giao dịch. Hãy thêm lần mua đầu tiên ở trên.',
     ),
   ).toBeVisible();
 });
