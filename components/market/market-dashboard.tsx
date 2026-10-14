@@ -764,22 +764,14 @@ export default function MarketDashboard({
         className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-base font-semibold hover:border-primary/50"
       >
         {english ? 'Record a transaction' : 'Ghi giao dịch mua hoặc bán'}
-        <span className="mt-1 block text-sm font-normal text-muted-foreground">
-          {english
-            ? 'Save your actual purchase or sale in a private gold ledger'
-            : 'Lưu giá mua hoặc bán thực tế vào sổ vàng riêng của bạn'}
-        </span>
+
       </Link>
       <Link
         href={`/cong-cu-vang?tool=so-sanh&set=${comparisonSet}&direction=buy&products=${companyId}%3A${productId}#so-sanh`}
         className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
       >
         {english ? 'Compare dealer prices' : 'So sánh giá các hãng'}
-        <span className="mt-1 block text-sm font-normal text-muted-foreground">
-          {english
-            ? 'See buy and sell prices side by side'
-            : 'Xem số tiền bạn trả và có thể nhận ở từng nơi'}
-        </span>
+
       </Link>
       {calculatorSupported ? (
         <Link
@@ -787,11 +779,7 @@ export default function MarketDashboard({
           className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
         >
           {english ? 'Estimate profit or loss' : 'Ước tính lãi hoặc lỗ'}
-          <span className="mt-1 block text-sm font-normal text-muted-foreground">
-            {english
-              ? 'Compare what you paid with the price today'
-              : 'So sánh số đã trả với giá cửa hàng mua lại hôm nay'}
-          </span>
+
         </Link>
       ) : (
         <div className="rounded-2xl border border-amber-300/60 bg-amber-50/60 px-4 py-4 text-base font-semibold text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/20 dark:text-amber-100">
@@ -829,7 +817,7 @@ export default function MarketDashboard({
               <Sparkles className="size-4 text-primary" aria-hidden="true" />
               {english
                 ? 'Gold prices, explained clearly'
-                : 'Giá vàng, giải thích dễ hiểu'}
+                : ''}
             </div>
             <h1
               id="market-title"
@@ -837,11 +825,7 @@ export default function MarketDashboard({
             >
               {english ? 'Vietnam gold prices today' : 'Giá vàng hôm nay'}
             </h1>
-            <p className="mt-2 max-w-3xl text-base leading-7 text-muted-foreground">
-              {english
-                ? 'See what you pay to buy and what a dealer pays you to sell. Compare prices and follow the trend before you decide.'
-                : 'Xem số tiền bạn cần trả khi mua và khoản có thể nhận khi bán. So sánh giá và theo dõi xu hướng trước khi quyết định.'}
-            </p>
+
           </section>
           <section
             className="market-selection mb-5 rounded-2xl border border-border bg-[var(--surface-solid)] p-4 shadow-sm sm:p-5"
@@ -895,11 +879,7 @@ export default function MarketDashboard({
                 </Button>
               </div>
             </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {english
-                ? '1 lượng = 10 chỉ. Prices, changes, and the chart use your selected unit.'
-                : '1 lượng = 10 chỉ. Giá, mức biến động và biểu đồ đều theo đơn vị bạn chọn.'}
-            </p>
+
           </section>
           {priceStatus}
 
@@ -941,8 +921,8 @@ export default function MarketDashboard({
                     <div className="flex items-start justify-between">
                       <p className="metric-label">
                         {english
-                          ? 'You buy · dealer sells'
-                          : 'Bạn mua · cửa hàng bán ra'}
+                          ? 'Dealer sells'
+                          : 'Cửa hàng bán ra'}
                       </p>
                       <ChangeBadge
                         value={daySellChange}
@@ -956,18 +936,14 @@ export default function MarketDashboard({
                         {displayUnitLabel(displayUnit, english)}
                       </span>
                     </p>
-                    <p className="metric-unit">
-                      {english
-                        ? 'The amount you pay'
-                        : 'Số tiền bạn trả khi mua'}
-                    </p>
+
                   </div>
                   <div className="metric-quote-row mt-4 border-t border-border/70 pt-4">
                     <div className="flex items-start justify-between">
                       <p className="metric-label">
                         {english
-                          ? 'You sell · dealer buys'
-                          : 'Bạn bán · cửa hàng mua vào'}
+                          ? 'Dealer buys'
+                          : 'Cửa hàng mua vào'}
                       </p>
                       <ChangeBadge
                         value={dayBuyChange}
@@ -981,11 +957,7 @@ export default function MarketDashboard({
                         {displayUnitLabel(displayUnit, english)}
                       </span>
                     </p>
-                    <p className="metric-unit">
-                      {english
-                        ? 'The amount the dealer pays you'
-                        : 'Số tiền cửa hàng trả khi bạn bán'}
-                    </p>
+
                   </div>
                 </article>
                 <article className="metric-card">
@@ -1099,11 +1071,7 @@ export default function MarketDashboard({
                     ? 'Understand today’s gold price in plain language'
                     : 'Hiểu giá vàng hôm nay bằng lời dễ hiểu'}
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {english
-                    ? 'Ask about the gold type you are viewing. You can start without entering personal numbers.'
-                    : 'Hỏi về đúng loại vàng bạn đang xem. Bạn có thể bắt đầu mà chưa cần nhập số tiền cá nhân.'}
-                </p>
+
               </div>
               <AnalysisRouteLink
                 companyId={companyId}

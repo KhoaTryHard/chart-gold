@@ -12,9 +12,9 @@ export function ToolPage({
   showGuideLink = true,
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   showGuideLink?: boolean;
   children: ReactNode;
 }) {
@@ -23,12 +23,12 @@ export function ToolPage({
     <PageTransition>
       <main id="main-content" tabIndex={-1} className="tool-page-content" aria-labelledby="tool-page-title">
           <div className="tool-intro">
-            <p className="tool-eyebrow">
+            {eyebrow ? <p className="tool-eyebrow">
               <span aria-hidden="true" />
               {eyebrow}
-            </p>
+            </p> : null}
             <h1 id="tool-page-title">{title}</h1>
-            <p className="tool-description">{description}</p>
+            {description ? <p className="tool-description">{description}</p> : null}
             {showGuideLink ? (
               <Link
                 href="/huong-dan#cac-cong-cu"

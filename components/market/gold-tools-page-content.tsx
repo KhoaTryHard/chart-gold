@@ -52,17 +52,8 @@ export function GoldToolsPageContent({
 
   return (
     <ToolPage
-      eyebrow={
-        english
-          ? 'Free tools · Decisions with context'
-          : 'Công cụ miễn phí · Quyết định có cơ sở'
-      }
+
       title={english ? 'Gold tools' : 'Công cụ vàng'}
-      description={
-        english
-          ? 'Choose what you want to do first. We will ask only for the information needed for that answer.'
-          : 'Chọn việc bạn muốn làm trước. Hệ thống chỉ hỏi những thông tin cần thiết để trả lời.'
-      }
     >
       <section
         className="glass-panel mb-6 p-5 sm:p-7"
@@ -77,11 +68,7 @@ export function GoldToolsPageContent({
         >
           {english ? 'What do you want to do with gold?' : 'Bạn muốn làm gì với vàng?'}
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          {english
-            ? 'Choose one. You can change your choice later without losing your entries.'
-            : 'Chọn một mục. Bạn có thể đổi lựa chọn sau mà không mất dữ liệu đã nhập.'}
-        </p>
+
         <div
           className="mt-5 grid gap-3 sm:grid-cols-3"
         >
@@ -89,23 +76,19 @@ export function GoldToolsPageContent({
             [
               'buy',
               english ? 'I want to buy gold' : 'Tôi muốn mua vàng',
-              english ? 'See the amount you need to pay.' : 'Xem số tiền bạn cần trả.',
+
             ],
             [
               'sell',
               english ? 'I want to sell gold' : 'Tôi muốn bán vàng',
-              english
-                ? 'See the amount a dealer may pay you.'
-                : 'Xem số tiền cửa hàng có thể trả bạn.',
+
             ],
             [
               'profit',
               english ? 'Calculate profit or loss' : 'Tính lời hoặc lỗ',
-              english
-                ? 'Compare what you paid with today’s buyback price.'
-                : 'So sánh số đã trả với giá cửa hàng mua lại.',
+
             ],
-          ] as const).map(([value, title, description]) => (
+          ] as const).map(([value, title]) => (
             <button
               key={value}
               type="button"
@@ -119,9 +102,6 @@ export function GoldToolsPageContent({
               }
             >
               <span className="block text-base font-semibold">{title}</span>
-              <span className="mt-1 block text-sm leading-5 text-muted-foreground">
-                {description}
-              </span>
             </button>
           ))}
         </div>
@@ -187,11 +167,7 @@ export function GoldToolsPageContent({
                   ? 'Find the price you pay'
                   : 'Tìm nơi bạn cần trả ít nhất'}
             </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {english
-                ? 'Choose the gold group, enter your quantity, and compare equivalent products.'
-                : 'Chọn nhóm vàng, nhập khối lượng và so sánh các sản phẩm tương đương.'}
-            </p>
+
           </div>
           <ComparePanel
             key={compareDirection}
@@ -207,11 +183,7 @@ export function GoldToolsPageContent({
             <h3 id="comparison-topics" className="font-heading text-xl font-semibold">
               {english ? 'Choose a gold group' : 'Chọn nhóm vàng'}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {english
-                ? 'Compare like with like. Rings and SJC bars have different conditions and are shown side by side without a shared “cheapest” rank.'
-                : 'So sánh cùng một mặt bằng. Nhẫn và vàng miếng SJC có điều kiện khác nhau nên chỉ được đặt cạnh nhau, không xếp chung “rẻ nhất”.'}
-            </p>
+
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <Link
                 href="/so-sanh/nhan-9999"

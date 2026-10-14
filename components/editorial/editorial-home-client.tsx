@@ -29,11 +29,7 @@ export function EditorialHomeClient({
       >
         {english ? 'Gold Pulse' : 'Nhịp vàng'}
       </h2>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        {english
-          ? 'Read the movement, understand the value. Reporting and explainers grounded in sourced data.'
-          : 'Đọc chuyển động, hiểu giá trị. Bản tin và giải thích dựa trên dữ liệu có nguồn.'}
-      </p>
+
     </div>
   );
   const allLink = (

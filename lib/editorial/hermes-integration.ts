@@ -43,6 +43,7 @@ const sourceSchema = z.object({
   accessedAt: timestamp,
 });
 const commonManifestSchema = z.object({
+  imageOrigin: z.enum(['ai_generated', 'owner_upload']).optional(),
   rootId: z.string().regex(/^[A-Za-z0-9-]{1,80}$/),
   draftId: z.string().regex(/^[A-Za-z0-9-]{1,80}$/),
   externalRevision: z.number().int().min(1),
@@ -109,6 +110,7 @@ export const hermesApprovalSchema = z.object({
 });
 type Manifest = z.infer<typeof hermesManifestSchema>;
 type CommonReviewPackage = {
+  imageOrigin?: 'ai_generated' | 'owner_upload';
   draftId: string;
   rootId: string;
   externalRevision: number;
@@ -309,7 +311,9 @@ export async function prepareHermesPackage(value: unknown, original: Buffer) {
           coverImageStorageKey: stored.pathname,
           coverImageAlt: manifest.website.coverAlt,
           coverImageDisclosure:
-            'Ảnh AI minh họa, không phải ảnh sự kiện hoặc bảng giá.',
+            manifest.imageOrigin === 'owner_upload'
+              ? 'Ảnh do chủ trang cung cấp'
+              : 'Ảnh AI minh họa, không phải ảnh sự kiện hoặc bảng giá.',
           coverImageProvider: 'admin-upload',
           coverImageModel: 'hermes-png-1200x675',
           reviewNote: null,
@@ -319,6 +323,7 @@ export async function prepareHermesPackage(value: unknown, original: Buffer) {
       validatePublishableRevision(revision);
       const url = new URL('/nhip-vang/' + created.article.slug, siteUrl).href;
       const commonReviewPackage: CommonReviewPackage = {
+        ...(manifest.imageOrigin ? { imageOrigin: manifest.imageOrigin } : {}),
         draftId: manifest.draftId,
         rootId: manifest.rootId,
         externalRevision: manifest.externalRevision,

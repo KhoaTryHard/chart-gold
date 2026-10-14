@@ -29,11 +29,7 @@ export function WorldGoldSection() {
           >
             {english ? 'World gold' : 'Vàng thế giới'}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {english
-              ? 'Follow gold price movement with the XAU/USD candlestick chart.'
-              : 'Theo dõi diễn biến vàng bằng biểu đồ nến XAU/USD.'}
-          </p>
+
         </div>
         <div className="world-gold-section__source">
           <span>OANDA · TradingView · USD/ounce troy</span>

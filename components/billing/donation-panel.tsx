@@ -461,14 +461,10 @@ export function DonationPanel() {
             <h2 className="font-heading text-xl font-semibold">
               {english ? 'Voluntary support' : 'Ủng hộ tự nguyện'}
             </h2>
-            <p className="text-xs text-muted-foreground">
-              {english ? 'Does not unlock uses or features.' : 'Không mở khóa lượt hay tính năng.'}
-            </p>
+
           </div>
         </div>
-        <p className="mt-5 text-sm leading-6 text-muted-foreground">
-          {english ? 'Gold-price tools, comparison, and basic calculations remain free. Contributions help maintain data sources, hosting, and experimental AI usage.' : 'Các công cụ giá vàng, so sánh và tính toán cơ bản vẫn miễn phí. Khoản ủng hộ giúp duy trì nguồn dữ liệu, hosting và các lượt AI thử nghiệm.'}
-        </p>
+
 
         <div className="mt-6 flex flex-wrap gap-2">
           {presets.map((value) => (
@@ -762,12 +758,7 @@ export function DonationPanel() {
                 <strong className="mt-1 block text-sm">{summary.donationCount}</strong>
               </div>
             </div>
-            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-              {summary.operatingCostVnd === null
-                ? (english ? 'Operating cost reconciliation has not been published yet.' : 'Chưa công bố chi phí vận hành đã đối soát.')
-                : (english ? `Reconciled operating cost: ${formatVnd(summary.operatingCostVnd)}.` : `Chi phí vận hành đã đối soát: ${formatVnd(summary.operatingCostVnd)}.`)}{' '}
-              {english ? 'Next: keep price sources and free tools available.' : 'Mục tiêu tiếp theo: duy trì nguồn giá và công cụ miễn phí.'}
-            </p>
+
             </>
           ) : null}
           <div className="mt-4 grid grid-cols-2 rounded-xl bg-muted/60 p-1 text-xs font-semibold">
@@ -836,9 +827,7 @@ export function DonationPanel() {
               </div>
             )}
           </div>
-          <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-            {english ? 'Display names are provided by supporters.' : 'Tên hiển thị là thông tin do người ủng hộ tự nhập.'}
-          </p>
+
         </section>
       </aside>
     </div>

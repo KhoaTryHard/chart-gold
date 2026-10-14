@@ -137,8 +137,9 @@ async function run() {
       check(`${viewport.name} donate heading is visible`, /Cùng giữ góc nhìn vàng minh bạch|Keep a transparent view of gold/.test(initialTitle));
       check(`${viewport.name} donate panel is visible`, await page.getByRole('heading', { name: /Ủng hộ tự nguyện|Voluntary support/ }).isVisible());
       const copy = await page.locator('body').innerText();
-      check(`${viewport.name} donation instructions are visible`, /Không mở khóa lượt hay tính năng|Does not unlock uses or features/.test(copy));
-      check(`${viewport.name} SePay disclosure is visible`, /Khoản ủng hộ được đối soát qua SePay|Contributions are reconciled through SePay/.test(copy));
+      check(`${viewport.name} voluntary support disclosure is visible`, /Ủng hộ hoàn toàn tự nguyện, không mở khóa tính năng hay cộng lượt AI|Support is entirely voluntary and does not unlock features or add AI usage/.test(copy));
+      check(`${viewport.name} donation amount control is visible`, await page.locator('#donation-amount').isVisible());
+      check(`${viewport.name} support QR action is visible`, await page.getByRole('button', { name: /Tạo mã QR ủng hộ|Create support QR code/ }).isVisible());
       const layout = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth,

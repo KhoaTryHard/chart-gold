@@ -924,19 +924,14 @@ export function PortfolioPageContent() {
       aria-labelledby="portfolio-page-title"
     >
       <div className="tool-intro">
-        <p className="tool-eyebrow">
-          <span aria-hidden="true" />
-          {english
-            ? 'Private account ledger · Synced across your devices'
-            : 'Sổ riêng theo tài khoản · Đồng bộ giữa các thiết bị'}
-        </p>
+
         <h1 id="portfolio-page-title">
           {english ? 'Gold ledger' : 'Sổ vàng tích sản'}
         </h1>
         <p className="tool-description">
           {english
             ? 'Record real buy and sell transactions, see your holdings valued at dealer buyback prices, and keep a backup on this device.'
-            : 'Ghi lại giao dịch mua bán thực tế, xem tài sản theo giá cửa hàng mua lại và chủ động sao lưu trên thiết bị này.'}
+            : 'Ghi lại giao dịch mua bán thực tế, xem tài sản theo giá cửa hàng mua lại và chủ động sao lưu trên tài khoản của bạn.'}
         </p>
       </div>
 
@@ -958,9 +953,7 @@ export function PortfolioPageContent() {
               {english ? 'lượng held' : 'lượng đang giữ'}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {english
-                ? 'Values use each product’s dealer buyback quote.'
-                : 'Giá trị dùng giá cửa hàng mua lại của từng sản phẩm.'}{' '}
+              {' '}
               {quoteLoading ? (
                 <RefreshCw
                   className="ml-1 inline size-3.5 animate-spin"
@@ -1731,11 +1724,7 @@ export function PortfolioPageContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <p className="mt-4 text-xs leading-5 text-muted-foreground">
-        {english
-          ? 'Your account ledger is saved on the server. A local cache keeps the latest copy visible while offline; drafts are not confirmed until the server saves them.'
-          : 'Sổ theo tài khoản được lưu trên máy chủ. Bản cache cục bộ giúp xem bản mới nhất khi mất mạng; giao dịch chỉ được xác nhận sau khi máy chủ lưu thành công.'}
-      </p>
+
     </main>
   );
 }

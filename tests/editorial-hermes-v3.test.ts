@@ -95,6 +95,16 @@ describe('Hermes v2 preservation and explicit v3 video mode', () => {
       hermesManifestSchema.parse({ ...manifest, schemaVersion: 2 }),
     ).toEqual(manifest);
   });
+  it('retains owner upload provenance in the signed manifest without changing old manifests', () => {
+    const uploaded = hermesManifestSchema.parse({
+      ...manifest,
+      imageOrigin: 'owner_upload',
+    });
+    expect(uploaded.imageOrigin).toBe('owner_upload');
+    expect(sha256(JSON.stringify(uploaded))).not.toBe(sha256(JSON.stringify(manifest)));
+    expect(hermesManifestSchema.parse(manifest)).not.toHaveProperty('imageOrigin');
+    expect(hermesManifestSchema.safeParse({ ...manifest, imageOrigin: 'unverified' }).success).toBe(false);
+  });
   it('retains every video integrity component for approval', () => {
     const parsed = hermesManifestSchema.parse({
       ...manifest,
