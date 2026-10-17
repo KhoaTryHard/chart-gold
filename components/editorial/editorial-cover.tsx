@@ -21,40 +21,39 @@ export function EditorialCover({
 }) {
   const { locale } = useLocale();
   return (
-    <div
-      className={`editorial-cover ${compact ? 'editorial-cover--compact' : ''}`}
-    >
-      {imageUrl ? (
-        <Image
-          className="editorial-cover__image"
-          src={imageUrl}
-          alt={imageAlt ?? (locale === 'en' ? `Illustration: ${title}` : `Ảnh minh họa: ${title}`)}
-          fill
-          sizes={
-            compact
-              ? '(max-width: 1023px) 100vw, 40vw'
-              : '(max-width: 1023px) 100vw, 65vw'
-          }
-        />
-      ) : (
-        <BrandMark size={240} className="editorial-cover__mark" />
-      )}
-      {imageUrl ? (
-        <span className="editorial-cover__scrim" aria-hidden="true" />
-      ) : null}
-      <div className="editorial-cover__content">
-        <BrandMark size={32} />
-        <span>{label || (locale === 'en' ? 'Gold Pulse' : 'Nhịp vàng')}</span>
-        {!compact ? <strong>{title}</strong> : null}
-        {imageDisclosure ? (
-          <small className="editorial-cover__disclosure">
-            {imageDisclosure}
-          </small>
-        ) : null}
+    <figure className="editorial-cover-figure">
+      <div
+        className={`editorial-cover ${compact ? 'editorial-cover--compact' : ''} ${imageUrl ? 'editorial-cover--image' : ''}`}
+      >
+        {imageUrl ? (
+          <Image
+            className="editorial-cover__image"
+            src={imageUrl}
+            alt={imageAlt ?? (locale === 'en' ? `Illustration: ${title}` : `Ảnh minh họa: ${title}`)}
+            fill
+            sizes={
+              compact
+                ? '(max-width: 1023px) 100vw, 40vw'
+                : '(max-width: 1023px) 100vw, 65vw'
+            }
+          />
+        ) : (
+          <>
+            <BrandMark size={240} className="editorial-cover__mark" />
+            <div className="editorial-cover__content">
+              <BrandMark size={32} />
+              <span>{label || (locale === 'en' ? 'Gold Pulse' : 'Nhịp vàng')}</span>
+              {!compact ? <strong>{title}</strong> : null}
+            </div>
+            <span className="sr-only">{locale === 'en' ? 'Illustration' : 'Hình minh họa'}: {title}</span>
+          </>
+        )}
       </div>
-      {!imageUrl ? (
-        <span className="sr-only">{locale === 'en' ? 'Illustration' : 'Hình minh họa'}: {title}</span>
+      {imageDisclosure ? (
+        <figcaption className="editorial-cover__disclosure">
+          {imageDisclosure}
+        </figcaption>
       ) : null}
-    </div>
+    </figure>
   );
 }
