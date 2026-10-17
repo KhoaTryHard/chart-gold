@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { put } from '@vercel/blob';
+import { put, mediaWriteProvider } from './media-storage';
+import { r2Config } from './r2';
 import { editorialImagePrompt } from './image-prompt';
 
 export { editorialImagePrompt } from './image-prompt';
@@ -55,6 +56,10 @@ function imageExtension(mimeType: EditorialImageMimeType) {
 }
 
 function ensureBlobConfigured() {
+  if (mediaWriteProvider() === 'r2') {
+    r2Config();
+    return;
+  }
   const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
   const hasVercelOidc = Boolean(
     process.env.BLOB_STORE_ID?.trim() && process.env.VERCEL_OIDC_TOKEN?.trim(),

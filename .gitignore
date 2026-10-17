@@ -41,4 +41,15 @@ next-env.d.ts
 /outputs/
 /work/
 
+# Bot source snapshots must not collect local credentials or runtime state.
+__pycache__/
+*.pyc
+*.secret
+/integrations/kim-tuyen-bot/data/
+/integrations/kim-tuyen-bot/assets/
+/integrations/kim-tuyen-bot/outputs/
+/integrations/kim-tuyen-bot/backups/
+/integrations/kim-tuyen-bot/config.json
+/integrations/kim-tuyen-bot/bridge-secret.json
+
 .env*

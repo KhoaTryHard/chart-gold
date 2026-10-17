@@ -1,0 +1,20 @@
+{
+  "release": "r2-standard-2026-10-17",
+  "source": "C:/Users/LENOVO/kim-tuyen-ai",
+  "files": {
+    "newsroom.py": "7aa258717db5cdc548dd0a2a1a87c3ae61dbf529c44d96fb262879ba726b3ca1",
+    "dual_channel.py": "e9fbdf6e2b616dba0b539fff26774febc67b45854662cb04ed3e316e2cb6d17a",
+    "editorial_images.py": "76427254759e1a760eec3b5ab0316c5fc0ea0ea795481ff154567ec02fbd9967",
+    "owner_images.py": "25251bfacb8e983fba633d8ab9e0dd08c4513247a2be84437c71f72c08bce130",
+    "video_workflow.py": "a2e513b2a80937a09c9f19efacd44bbe83f1ecf77f7e35f4795986837896be8f",
+    "elevenlabs_video.py": "0c3099b6c47b5401dbfe5bed2a1cef3d0fb44fb5627fd64571815921e6b8bb5c",
+    "website_bridge.py": "3cbb3e3838f3ce341e2f1f2a8380234be11955ef116cc0cc7d90f66580a1d787",
+    "video_bridge.py": "f4c137d8379efaa3875c827dc1643825c2aad9b167a5ec5d44a8c45ac8d3c8d7",
+    "video_upload.mjs": "60a08b282ea35771d725479a92e42a0984b4884996a517128fa0bba193f55164",
+    "media_storage.py": "965bc1d303639efb180d287424270a769c0d166651159055f0fcf61ae7d89e13",
+    "test_media_storage.py": "06c46b234753b19de7ea9d7adfa5f78304c7699cda7a41cb40a81527167341ec",
+    "test_r2_video_upload.py": "6ef9f73316371b3f3fd89e0817cea39a0a889daa1dc8acf37b20b84e5afffe02",
+    "requirements-storage.txt": "7853dba7b36920cbd001963062ff4608d325e450cd9fa098bd0d2b7c0440e1e3"
+  },
+  "normalization": "UTF-8 LF; single final newline"
+}

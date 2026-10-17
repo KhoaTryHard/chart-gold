@@ -14,5 +14,6 @@ coverage/
 tests/
 docs/
 work/
+integrations/
 scripts/
 *.md

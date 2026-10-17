@@ -10,7 +10,10 @@ export async function POST(request: Request) {
   try {
     const body = await verifyIntegrationRequest(request);
     return Response.json(
-      await createVideoUploadToken(JSON.parse(body.toString())),
+      await createVideoUploadToken(
+        JSON.parse(body.toString()),
+        new URL(request.url).searchParams.get('uploadProtocol'),
+      ),
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {

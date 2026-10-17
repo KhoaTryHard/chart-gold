@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { get, put, del } from '@vercel/blob';
+import { get, put, del } from './media-storage';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDatabase } from '@/db';

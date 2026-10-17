@@ -1,4 +1,4 @@
-import { get } from '@vercel/blob';
+import { get } from '@/lib/editorial/media-storage';
 import { eq } from 'drizzle-orm';
 import { getDatabase } from '@/db';
 import { articleRevisions, articles } from '@/db/schema';

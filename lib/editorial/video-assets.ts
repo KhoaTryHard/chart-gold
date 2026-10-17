@@ -1,6 +1,13 @@
 import 'server-only';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { get, head } from '@vercel/blob';
+import {
+  get,
+  head,
+  mediaLocation,
+  mediaWriteProvider,
+  expectedMediaEtag,
+} from './media-storage';
+import { r2UploadGrant } from './r2';
 import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -9,6 +16,7 @@ import {
   articles,
   editorialIntegrationPackages,
   editorialVideoAssets,
+  mediaStorageLocations,
 } from '@/db/schema';
 import { siteUrl } from '@/lib/seo';
 import {
@@ -87,7 +95,10 @@ function assetResponse(asset: Asset) {
   };
 }
 
-export async function createVideoUploadToken(value: unknown) {
+export async function createVideoUploadToken(
+  value: unknown,
+  protocol: string | null = null,
+) {
   requireHermesVideo();
   const input = parse(uploadSchema, value);
   const descriptorDigest = sha256(JSON.stringify(input));
@@ -130,6 +141,16 @@ export async function createVideoUploadToken(value: unknown) {
         pathname: `editorial/videos/${id}/${input.video.sha256}.mp4`,
       })
       .returning();
+    if (protocol === 'r2-put-v1' && mediaWriteProvider() === 'r2') {
+      await tx.insert(mediaStorageLocations).values({
+        pathname: created.pathname,
+        objectKey: created.pathname,
+        provider: 'r2',
+        size: input.video.bytes,
+        contentType: 'video/mp4',
+        sha256: input.video.sha256,
+      });
+    }
     return created;
   });
   if (asset.status === 'ready')
@@ -140,6 +161,18 @@ export async function createVideoUploadToken(value: unknown) {
       validUntil: null,
     };
   const validUntil = Date.now() + 15 * 60_000;
+  const location = await mediaLocation(asset.pathname);
+  if (location?.provider === 'r2') {
+    if (protocol !== 'r2-put-v1')
+      throw new IntegrationError('Cần cập nhật bộ tải video R2.', 409);
+    return {
+      ...assetResponse(asset),
+      pathname: asset.pathname,
+      clientToken: null,
+      validUntil,
+      upload: await r2UploadGrant(location.objectKey, input.video.bytes),
+    };
+  }
   const clientToken = await generateClientTokenFromReadWriteToken({
     pathname: asset.pathname,
     allowedContentTypes: ['video/mp4'],
@@ -221,6 +254,18 @@ export async function completeVideoUpload(id: string) {
     const inspected = inspectEditorialMp4(bytes);
     if (Math.abs(inspected.duration - descriptor.duration) > 0.1)
       throw new IntegrationError('Thời lượng video khác metadata đã đăng ký.');
+    const location = await mediaLocation(asset.pathname);
+    if (location?.provider === 'r2') {
+      await getDatabase()
+        .update(mediaStorageLocations)
+        .set({
+          etag: file.blob.etag,
+          sha256: descriptor.sha256,
+          verifiedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(mediaStorageLocations.pathname, asset.pathname));
+    }
     const [updated] = await getDatabase()
       .update(editorialVideoAssets)
       .set({
@@ -504,11 +549,13 @@ export async function serveVideoMedia(request: Request, assetId: string) {
   const file = await get(asset.pathname, {
     access: 'private',
     useCache: false,
+    range: range ?? undefined,
   });
   if (
     !file ||
     file.statusCode !== 200 ||
-    file.blob.etag !== asset.blobEtag ||
+    file.blob.etag !==
+      (await expectedMediaEtag(asset.pathname, asset.blobEtag)) ||
     file.blob.size !== descriptor.bytes
   )
     throw new IntegrationError(
@@ -516,7 +563,9 @@ export async function serveVideoMedia(request: Request, assetId: string) {
       503,
     );
   return new Response(
-    range ? sliceStream(file.stream, range.start, range.end) : file.stream,
+    range && !file.ranged
+      ? sliceStream(file.stream, range.start, range.end)
+      : file.stream,
     { status: range ? 206 : 200, headers },
   );
 }

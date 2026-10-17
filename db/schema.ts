@@ -15,6 +15,26 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+// Physical storage identity is deliberately outside article/package approval hashes.
+export const mediaStorageLocations = pgTable('media_storage_locations', {
+  pathname: text('pathname').primaryKey(),
+  provider: text('provider').notNull(),
+  objectKey: text('object_key').notNull(),
+  size: integer('size').notNull(),
+  contentType: text('content_type').notNull(),
+  sha256: varchar('sha256', { length: 64 }),
+  etag: text('etag'),
+  sourceBlobUrl: text('source_blob_url'),
+  sourceBlobEtag: text('source_blob_etag'),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
 export const planCodeEnum = pgEnum('plan_code', [
   'trial',
@@ -575,11 +595,18 @@ export const editorialVideoAssets = pgTable(
     blobEtag: text('blob_etag'),
     status: varchar('status', { length: 24 }).notNull().default('uploading'),
     validatedAt: timestamp('validated_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex('editorial_video_client_draft_unique').on(table.clientId, table.draftId),
+    uniqueIndex('editorial_video_client_draft_unique').on(
+      table.clientId,
+      table.draftId,
+    ),
     uniqueIndex('editorial_video_pathname_unique').on(table.pathname),
     index('editorial_video_status_idx').on(table.status, table.createdAt),
   ],

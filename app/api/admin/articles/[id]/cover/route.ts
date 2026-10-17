@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { del } from '@vercel/blob';
+import { del } from '@/lib/editorial/media-storage';
 import { and, eq } from 'drizzle-orm';
 import { getDatabase } from '@/db';
 import { articleRevisions } from '@/db/schema';
