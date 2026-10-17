@@ -100,7 +100,7 @@ const quoteResponse = {
   source: { provider: 'SJC', url: 'https://sjc.com.vn', official: true },
 };
 
-test('separates Sunday retrieval from Saturday publication without assuming a source outage', async ({
+test('shows the published time without the later retrieval time or an outage warning', async ({
   page,
 }) => {
   await page.clock.setFixedTime(new Date('2026-10-04T08:30:00Z'));
@@ -124,11 +124,12 @@ test('separates Sunday retrieval from Saturday publication without assuming a so
   await page.goto('/');
   const status = page.getByLabel('Trạng thái nguồn giá');
   await expect(status).toContainText('Giá công bố gần nhất');
-  await expect(status).toContainText('Nguồn công bố');
+  await expect(status).toContainText(/Công bố\s*:/);
   await expect(status).toContainText('1 ngày trước');
-  await expect(status).toContainText('Hệ thống lấy dữ liệu');
+  await expect(status).not.toContainText('Hệ thống lấy dữ liệu');
+  await expect(status).not.toContainText('Nguồn công bố');
   await expect(status).toContainText(/03[/-]10/);
-  await expect(status).toContainText(/04[/-]10/);
+  await expect(status).not.toContainText(/04[/-]10/);
   await expect(page.getByText('Nguồn đang trễ', { exact: true })).toHaveCount(
     0,
   );
@@ -152,8 +153,8 @@ test('does not label retrieval-only time as source publication', async ({
   await page.goto('/');
   const status = page.getByLabel('Trạng thái nguồn giá');
   await expect(status).toContainText('Ghi nhận');
-  await expect(status).toContainText('Hệ thống lấy dữ liệu');
-  await expect(status).not.toContainText('Nguồn công bố');
+  await expect(status).not.toContainText('Hệ thống lấy dữ liệu');
+  await expect(status).not.toContainText(/Công bố\s*:/);
 });
 
 test('opens the domestic line chart before price cards and updates their units together', async ({

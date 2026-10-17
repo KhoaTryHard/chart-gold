@@ -707,27 +707,12 @@ export default function MarketDashboard({
             {timestampKind === 'source'
               ? english
                 ? 'Source published'
-                : 'Nguồn công bố'
+                : 'Công bố'
               : english
                 ? 'Observed'
                 : 'Ghi nhận'}
             : {formatTiming(observedAt)}
             {sourceAge ? ` (${sourceAge})` : ''}
-          </span>
-          {fetchedAt ? (
-            <span>
-              {english ? 'System retrieved' : 'Hệ thống lấy dữ liệu'}:{' '}
-              {formatTiming(fetchedAt)}
-            </span>
-          ) : null}
-        </>
-      ) : null}
-      {hasMarketData ? (
-        <>
-          <span aria-hidden="true">·</span>
-          <span>
-            {english ? 'Source' : 'Nguồn'}:{' '}
-            {presentMarketCatalogText(source.provider, locale)}
           </span>
         </>
       ) : null}
