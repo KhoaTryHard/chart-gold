@@ -88,14 +88,17 @@ async function signInAsE2eAdmin(page: Page) {
 }
 
 test.describe('Phân tích AI — guest and lazy-load UI', () => {
-  test('opens the goal-first AI workspace', async ({ page }) => {
+  test('opens the free-question AI workspace', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/phan-tich');
     await expect(
       page.getByRole('heading', { name: 'Phân tích AI', exact: true }),
     ).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByRole('tab', { name: /Tôi đang giữ vàng/ }),
+      page.getByRole('button', {
+        name: 'Xem lãi/lỗ từ Sổ vàng của tôi.',
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       page.locator('textarea#analysis-question').first(),
@@ -136,15 +139,8 @@ test.describe('Phân tích AI — guest and lazy-load UI', () => {
     await expect(page).toHaveURL(
       /\/phan-tich\?company=pnj&product=pnj-ring-9999&range=7N/,
     );
-    await expect(
-      page.locator('.ai-content-grid aside select').nth(0),
-    ).toHaveValue('pnj');
-    await expect(
-      page.locator('.ai-content-grid aside select').nth(1),
-    ).toHaveValue('pnj-ring-9999');
-    await expect(
-      page.locator('.ai-content-grid aside select').nth(2),
-    ).toHaveValue('7N');
+    await expect(page.getByText(/Phạm vi: PNJ.*7 ngày/)).toBeVisible();
+    await expect(page.locator('textarea#analysis-question')).toHaveValue('');
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 

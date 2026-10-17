@@ -6,6 +6,7 @@ import {
   type AnalysisIntent,
 } from './intent';
 import { investmentInputs } from './investor-profile';
+import { answerFocus } from './focus';
 import { missingAnalysisInputs, type ScenarioInputs } from './experience';
 import type { AiCapability } from '@/lib/billing/plans';
 
@@ -37,7 +38,10 @@ export function resolveScenario(
   const costPerLuongVnd =
     scenario?.costPerLuongVnd ?? extracted.costPerLuongVnd;
   const feeVnd = scenario?.feeVnd ?? extracted.feesVnd;
-  const hasInputs = quantityLuong !== undefined || costPerLuongVnd !== undefined || feeVnd !== undefined;
+  const hasInputs =
+    quantityLuong !== undefined ||
+    costPerLuongVnd !== undefined ||
+    feeVnd !== undefined;
   return {
     quantity: quantityLuong,
     unit: 'luong',
@@ -85,7 +89,11 @@ export function parseVietnameseNumber(
     );
   const value = Number(normalized);
   if (!Number.isFinite(value) || value < 0)
-    throw new Error(messageLocale === 'en' ? 'Value must be a non-negative number.' : 'Giá trị phải là số không âm.');
+    throw new Error(
+      messageLocale === 'en'
+        ? 'Value must be a non-negative number.'
+        : 'Giá trị phải là số không âm.',
+    );
   return value;
 }
 
@@ -104,14 +112,33 @@ export function prepareAnalysisInput(
       capability: undefined as AiCapability | undefined,
       resolvedScenario: undefined as ResolvedScenario | undefined,
     };
-  if (payload.analysisDepth) intent.depth = payload.analysisDepth;
-  const personal =
-    intent.kind === 'investment' ||
-    /dang giu|vang toi|toi dang|cua toi|da mua|mua \d|giu \d|ban \d|\b(?:i|my)\b.*\b(?:hold|holding|own|bought|buy|sell|sold|portfolio)\b|\b(?:my gold|my position|my portfolio)\b/.test(
+  if (payload.analysisDepth === 'deep') intent.depth = 'deep';
+  else if (payload.analysisDepth === 'standard' && intent.depth === 'deep')
+    intent.depth = 'standard';
+  const extracted = investmentInputs(payload.question);
+  const conceptOnly =
+    /la gi|y nghia|what is|what does|meaning/.test(
       normalizeQuestion(payload.question),
-    );
+    ) &&
+    extracted.quantityLuong === undefined &&
+    extracted.costPerLuongVnd === undefined;
+  const personal =
+    !conceptOnly &&
+    (intent.kind === 'investment' ||
+      extracted.quantityLuong !== undefined ||
+      extracted.costPerLuongVnd !== undefined ||
+      /dang giu|vang toi|toi dang|cua toi|da mua|mua \d|giu \d|ban \d|\b(?:i|my)\b.*\b(?:hold|holding|own|bought|buy|sell|sold|portfolio)\b|\b(?:my gold|my position|my portfolio)\b/.test(
+        normalizeQuestion(payload.question),
+      ));
+  const focus = answerFocus(payload.question, intent, payload.goal);
+  if (personal && (focus === 'buy' || focus === 'hold'))
+    intent.scope = 'selected';
   const goal = personal
-    ? payload.goal
+    ? focus === 'hold'
+      ? 'hold'
+      : focus === 'buy'
+        ? 'buy'
+        : payload.goal
     : intent.kind === 'macro'
       ? 'market'
       : intent.kind === 'comparison'
@@ -125,7 +152,6 @@ export function prepareAnalysisInput(
     personal && payload.usePortfolioLedger === true
       ? payload.portfolioLedger
       : undefined;
-  const extracted = investmentInputs(payload.question);
   const scenario: ScenarioInputs = personal
     ? { ...payload.scenarioInputs }
     : {};
@@ -152,9 +178,10 @@ export function prepareAnalysisInput(
               : field === 'feeVnd'
                 ? 'Phí giao dịch'
                 : 'Giá vốn mỗi lượng',
-        reason: payload.locale === 'en'
-          ? 'This differs from the entered value. Make them consistent before analysis.'
-          : 'Giá trị trong câu hỏi khác ô nhập. Hãy sửa cho thống nhất trước khi phân tích.',
+        reason:
+          payload.locale === 'en'
+            ? 'This differs from the entered value. Make them consistent before analysis.'
+            : 'Giá trị trong câu hỏi khác ô nhập. Hãy sửa cho thống nhất trước khi phân tích.',
       });
     } else scenario[field] = value;
   }
@@ -162,9 +189,10 @@ export function prepareAnalysisInput(
     needs.push({
       key: 'personalContext',
       label: payload.locale === 'en' ? 'Position source' : 'Nguồn vị thế',
-      reason: payload.locale === 'en'
-        ? 'Choose either the profile or the gold ledger for this request to avoid counting a position twice.'
-        : 'Chọn hồ sơ hoặc sổ vàng cho lượt này để tránh tính trùng vị thế.',
+      reason:
+        payload.locale === 'en'
+          ? 'Choose either the profile or the gold ledger for this request to avoid counting a position twice.'
+          : 'Chọn hồ sơ hoặc sổ vàng cho lượt này để tránh tính trùng vị thế.',
     });
   needs.push(
     ...missingAnalysisInputs({
@@ -190,7 +218,13 @@ export function prepareAnalysisInput(
     payload.question,
     payload.companyId,
     payload.productId,
-    ledger ? 'ledger' : profile ? 'profile' : payload.scenarioInputs ? 'form' : 'chat',
+    ledger
+      ? 'ledger'
+      : profile
+        ? 'profile'
+        : payload.scenarioInputs
+          ? 'form'
+          : 'chat',
   );
   return {
     intent,

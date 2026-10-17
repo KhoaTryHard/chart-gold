@@ -85,17 +85,20 @@ test.beforeEach(async ({ page }) => {
   await mock(page);
 });
 
-test('defaults to genuine sell candles, changes sides/units/mode, exposes accessible prices', async ({
+test('defaults to domestic buy/sell lines and lets users choose genuine candles', async ({
   page,
 }) => {
   await page.goto('/');
   const chart = page.getByTestId('domestic-chart');
-  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
   await expect(
     chart.getByRole('button', { name: '1 năm', exact: true }),
   ).toHaveCount(0);
   const readout = chart.getByTestId('chart-readout');
   await expect(readout).toContainText('146,40');
+  await expect(readout).toContainText('143,40');
+  await chart.getByRole('button', { name: 'Nến', exact: true }).click();
+  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
   await chart.getByRole('button', { name: 'Mua vào', exact: true }).click();
   await expect(readout).toContainText('143,40');
   await page.getByRole('button', { name: 'Chỉ', exact: true }).click();
@@ -127,10 +130,67 @@ for (const width of [390, 768, 1280]) {
   }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.setViewportSize({ width, height: 1000 });
+    await page.setViewportSize({
+      width,
+      height: width < 640 ? 844 : width < 1024 ? 1024 : 900,
+    });
+    await page.route('**/api/sjc?*', (route) =>
+      route.fulfill({
+        json: {
+          ...quote,
+          timestampKind: 'source',
+          sourcePublishedAt: '2026-10-14T06:00:00Z',
+          fetchedAt: '2026-10-14T08:00:00Z',
+        },
+      }),
+    );
     await page.goto('/');
     const chart = page.getByTestId('domestic-chart');
-    await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+    await expect(
+      chart.getByRole('button', { name: 'Nến', exact: true }),
+    ).toBeEnabled();
+    await expect(chart).toHaveAttribute('data-chart-mode', 'line');
+    await expect(
+      page.getByText('Nguồn công bố giá này 2 giờ trước.', { exact: false }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.getByTestId('domestic-chart-entry').evaluate((element) => {
+          const headerBottom = document
+            .querySelector('.site-header')!
+            .getBoundingClientRect().bottom;
+          return Math.abs(
+            element.getBoundingClientRect().top - headerBottom - 12,
+          );
+        }),
+      )
+      .toBeLessThan(8);
+    await expect(chart.getByRole('slider')).toBeInViewport({ ratio: 0.95 });
+    const entryOrder = await page.evaluate(() => {
+      const chart = document.querySelector('[data-testid="domestic-chart"]')!;
+      const quote = document.querySelector('.metric-card--quote')!;
+      const world = document.querySelector('#vang-the-gioi')!;
+      return {
+        chartBeforeQuote: Boolean(
+          chart.compareDocumentPosition(quote) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+        chartBeforeWorld: Boolean(
+          chart.compareDocumentPosition(world) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+        scrolledToChart: scrollY > 0,
+      };
+    });
+    expect(entryOrder).toEqual({
+      chartBeforeQuote: true,
+      chartBeforeWorld: true,
+      scrolledToChart: true,
+    });
+    await page.screenshot({
+      path: testInfo.outputPath(`entry-${width}-light.png`),
+      animations: 'disabled',
+    });
     await chart.scrollIntoViewIfNeeded();
     const plot = chart.getByRole('slider');
     const plotBox = (await plot.boundingBox())!;
@@ -154,13 +214,63 @@ for (const width of [390, 768, 1280]) {
       .getByRole('button', { name: 'Chuyển sang giao diện tối' })
       .click();
     await chart.scrollIntoViewIfNeeded();
-    await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+    await expect(chart).toHaveAttribute('data-chart-mode', 'line');
     await chart.screenshot({
       path: testInfo.outputPath(`domestic-${width}-dark.png`),
     });
     expect(errors).toEqual([]);
   });
 }
+
+test('positions the loading chart once and preserves the user’s view on refresh', async ({
+  page,
+}) => {
+  let releaseQuote!: () => void;
+  const pendingQuote = new Promise<void>((resolve) => {
+    releaseQuote = resolve;
+  });
+  await page.route('**/api/sjc?*', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('view') === 'quote')
+      await pendingQuote;
+    await route.fulfill({ json: quote });
+  });
+  await page.goto('/');
+  await expect(page.getByTestId('domestic-chart-loading')).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('domestic-chart-entry')
+        .evaluate((element) =>
+          Math.abs(
+            element.getBoundingClientRect().top -
+              document.querySelector('.site-header')!.getBoundingClientRect()
+                .bottom -
+              12,
+          ),
+        ),
+    )
+    .toBeLessThan(8);
+  releaseQuote();
+  const chart = page.getByTestId('domestic-chart');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  const refreshed = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/sjc?') &&
+      response.url().includes('view=quote'),
+  );
+  await page.getByRole('button', { name: 'Cập nhật giá', exact: true }).click();
+  await refreshed;
+  await expect(
+    page.getByRole('button', { name: 'Cập nhật giá', exact: true }),
+  ).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await page
+    .getByRole('button', { name: 'Chuyển sang giao diện tối', exact: true })
+    .click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
 
 test('keeps partial days explicit and falls back to lines when the candle source fails', async ({
   page,
@@ -179,6 +289,8 @@ test('keeps partial days explicit and falls back to lines when the candle source
   await page.goto('/');
   const chart = page.getByTestId('domestic-chart');
   await expect(chart).toContainText('Lịch sử chưa đầy đủ: 29/30 ngày');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
+  await chart.getByRole('button', { name: 'Nến', exact: true }).click();
   await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
   await page.route('**/api/market-candles?*', (route) =>
     route.fulfill({ status: 503, json: {} }),
@@ -203,7 +315,7 @@ test('ignores a delayed response for an obsolete range', async ({ page }) => {
   });
   await page.goto('/');
   const chart = page.getByTestId('domestic-chart');
-  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
   await chart.getByRole('button', { name: '7 ngày', exact: true }).click();
   await chart.getByRole('button', { name: '1 tháng', exact: true }).click();
   await expect(chart).toContainText('30 phiên đang xem');
@@ -232,7 +344,8 @@ test('changing the product clears the previous candle selection', async ({
   });
   await page.goto('/');
   const chart = page.getByTestId('domestic-chart');
-  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
+  await chart.getByRole('button', { name: 'Nến', exact: true }).click();
   await chart.getByRole('slider').focus();
   await chart.getByRole('slider').press('Home');
   await expect(chart.getByTestId('chart-readout')).toContainText('15/09/2026');
@@ -240,7 +353,7 @@ test('changing the product clears the previous candle selection', async ({
   await page
     .getByRole('option', { name: 'Vàng miếng SJC 5 chỉ', exact: true })
     .click();
-  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
   await expect(chart.getByTestId('chart-readout')).toContainText('14/10/2026');
 });
 
@@ -250,7 +363,7 @@ test('preserves the visible month when resizing from desktop to mobile', async (
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto('/');
   const chart = page.getByTestId('domestic-chart');
-  await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
+  await expect(chart).toHaveAttribute('data-chart-mode', 'line');
   await page.setViewportSize({ width: 390, height: 1000 });
   await chart.getByRole('slider').hover({ position: { x: 30, y: 150 } });
   await expect(chart.getByTestId('chart-readout')).toContainText('/09/2026');
@@ -270,6 +383,8 @@ test.describe('touch interaction', () => {
   }) => {
     await page.goto('/');
     const chart = page.getByTestId('domestic-chart');
+    await expect(chart).toHaveAttribute('data-chart-mode', 'line');
+    await chart.getByRole('button', { name: 'Nến', exact: true }).click();
     await expect(chart).toHaveAttribute('data-chart-mode', 'candles');
     const plot = chart.getByRole('slider');
     await plot.scrollIntoViewIfNeeded();

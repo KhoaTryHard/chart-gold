@@ -370,7 +370,7 @@ export async function loadMarketContext(
   const groups = selectQuoteGroups(intent, companyId, productId);
   const asksAboutPortfolio =
     intent.kind === 'investment' ||
-    /danh muc|so giao dich|lo vang|da mua|dang giu|chot loi|lai lo|portfolio/.test(
+    /danh muc|so vang|gold ledger|my ledger|so giao dich|lo vang|da mua|dang giu|chot loi|lai\W*lo|portfolio/.test(
       normalizeQuestion(question),
     );
   // A portfolio question also needs the quotes for its explicitly saved holdings.

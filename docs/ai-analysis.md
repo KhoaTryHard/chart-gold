@@ -2,7 +2,7 @@
 
 ## Trải nghiệm AI v2
 
-Luồng mới ở `/phan-tich` ưu tiên bốn mục tiêu: định mua, đang giữ vàng, so sánh loại vàng và hiểu thị trường. `POST /api/analysis/prepare` kiểm tra input và capability mà không trừ lượt; `POST /api/analysis` vẫn là luồng SSE tương thích v1 và nhận `responseVersion: 2`, `goal`, `analysisDepth`, `scenarioInputs` cùng lựa chọn hồ sơ/sổ. SSE v2 bổ sung `facts` và `decision` đã xác thực schema để UI dựng thẻ số liệu/kết luận; số liệu vẫn lấy từ server.
+Từ 18/10/2026, `/phan-tich` mở bằng ô chat trống và bốn gợi ý nhỏ; không tự dùng Sổ vàng. `goal` mô tả câu hỏi, còn `usePortfolioLedger` là lựa chọn dùng dữ liệu sổ. Client mới luôn gửi boolean này; request cũ chưa có cờ vẫn dùng quy ước `goal=hold`. Câu hỏi tự khai số lượng/giá vốn được tính độc lập. Câu tra cứu hướng tới 40–100 từ, giải thích thường 200–350 từ, chuyên sâu tối đa khoảng 600 từ; Gemini dùng mức suy luận LOW cho chế độ thường để dành token cho nội dung. Thẻ số liệu được chọn theo câu hỏi; nguồn/phạm vi thu vào phần mở rộng. `POST /api/analysis/prepare` kiểm tra input và capability mà không trừ lượt; `POST /api/analysis` vẫn là luồng SSE tương thích v1 và nhận `responseVersion: 2`, `goal`, `analysisDepth`, `scenarioInputs` cùng lựa chọn hồ sơ/sổ. SSE v2 bổ sung `facts` và `decision` đã xác thực schema để UI dựng thẻ số liệu/kết luận; số liệu vẫn lấy từ server.
 
 Production đặt `AI_EXPERIENCE_V2_ENABLED=true`. Mọi tài khoản Google có email đã xác minh dùng được bốn mục tiêu AI sau khi đăng nhập. Kết quả v2 có `promptVersion` và `schemaVersion` trong metadata hoàn tất. Phản hồi “Hữu ích/Chưa hữu ích” gửi tới `POST /api/analysis/feedback` theo `requestId`, chỉ lưu rating/reason và không lưu nội dung tự do.
 

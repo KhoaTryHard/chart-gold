@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { useHeaderActions } from '@/components/app-shell';
 import { useLocale } from '@/components/locale-provider';
 import { PageTransition } from '@/components/page-transition';
+import { ChartEntryViewport } from '@/components/market/chart-entry-viewport';
 import {
   AnalysisRouteLink,
   analysisHref,
@@ -43,11 +44,11 @@ const PriceChart = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="mt-8 min-h-[650px] space-y-4"
+        className="mb-6 min-h-[480px] space-y-4"
         aria-label="Đang tải biểu đồ"
       >
         <span className="ui-skeleton block h-5 w-48" />
-        <span className="ui-skeleton mt-4 block h-[480px] w-full rounded-[20px] lg:h-[680px]" />
+        <span className="ui-skeleton mt-4 block h-[360px] w-full rounded-[20px] sm:h-[480px] lg:h-[560px]" />
       </div>
     ),
   },
@@ -147,54 +148,33 @@ function marketCacheKey(
 function MarketSkeleton() {
   return (
     <div className="space-y-6" aria-label="Đang tải dữ liệu thị trường">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div
-          className="metric-card metric-card--gold metric-card--quote min-h-[291px] sm:col-span-2 sm:min-h-[248px] xl:col-span-2"
-          aria-hidden="true"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span className="ui-skeleton h-4 w-36" />
-            <span className="ui-skeleton h-7 w-24" />
-          </div>
-          <span className="ui-skeleton mt-4 block h-9 w-64" />
-          <span className="ui-skeleton mt-3 block h-3 w-40" />
-          <div className="mt-4 border-t border-border/70 pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="ui-skeleton h-4 w-36" />
-              <span className="ui-skeleton h-7 w-24" />
-            </div>
-            <span className="ui-skeleton mt-4 block h-9 w-64" />
-            <span className="ui-skeleton mt-3 block h-3 w-40" />
-          </div>
-        </div>
-        {[0, 1].map((index) => (
-          <div
-            key={index}
-            className="metric-card min-h-[176px]"
-            aria-hidden="true"
-          >
-            <span className="ui-skeleton h-4 w-32" />
-            <span className="ui-skeleton mt-7 h-10 w-36" />
-            <span className="ui-skeleton mt-3 h-4 w-40" />
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3" aria-hidden="true">
-        {[0, 1, 2].map((index) => (
-          <div key={index} className="glass-panel min-h-[105px] space-y-3 p-4">
-            <span className="ui-skeleton h-4 w-36" />
-            <span className="ui-skeleton h-4 w-52" />
-          </div>
-        ))}
-      </div>
-      <div className="space-y-4" aria-hidden="true">
-        <span className="ui-skeleton block h-4 w-48" />
-        <span className="ui-skeleton block h-8 w-64" />
-        <div className="rounded-[20px] border border-border bg-[var(--surface-solid)] p-4">
-          <span className="ui-skeleton block h-11 w-64" />
+      <div
+        className="space-y-3"
+        data-testid="domestic-chart-loading"
+        aria-busy="true"
+      >
+        <span className="ui-skeleton block h-6 w-56" />
+        <div className="rounded-[20px] border border-border bg-[var(--surface-solid)] p-3">
+          <span className="ui-skeleton block h-11 w-64 max-w-full" />
           <span className="ui-skeleton mt-4 block h-[360px] w-full sm:h-[480px] lg:h-[560px]" />
         </div>
-        <span className="ui-skeleton block h-24 w-full" />
+      </div>
+      <div
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        aria-hidden="true"
+      >
+        <div className="metric-card metric-card--quote min-h-[248px] sm:col-span-2">
+          <span className="ui-skeleton block h-4 w-36" />
+          <span className="ui-skeleton mt-4 block h-9 w-56 max-w-full" />
+          <span className="ui-skeleton mt-7 block h-4 w-36" />
+          <span className="ui-skeleton mt-4 block h-9 w-56 max-w-full" />
+        </div>
+        {[0, 1].map((index) => (
+          <div key={index} className="metric-card min-h-[176px]">
+            <span className="ui-skeleton block h-4 w-32" />
+            <span className="ui-skeleton mt-7 block h-9 w-36" />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -764,14 +744,12 @@ export default function MarketDashboard({
         className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-base font-semibold hover:border-primary/50"
       >
         {english ? 'Record a transaction' : 'Ghi giao dịch mua hoặc bán'}
-
       </Link>
       <Link
         href={`/cong-cu-vang?tool=so-sanh&set=${comparisonSet}&direction=buy&products=${companyId}%3A${productId}#so-sanh`}
         className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
       >
         {english ? 'Compare dealer prices' : 'So sánh giá các hãng'}
-
       </Link>
       {calculatorSupported ? (
         <Link
@@ -779,7 +757,6 @@ export default function MarketDashboard({
           className="rounded-2xl border border-border bg-[var(--surface-solid)] px-4 py-4 text-base font-semibold hover:border-primary/40"
         >
           {english ? 'Estimate profit or loss' : 'Ước tính lãi hoặc lỗ'}
-
         </Link>
       ) : (
         <div className="rounded-2xl border border-amber-300/60 bg-amber-50/60 px-4 py-4 text-base font-semibold text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/20 dark:text-amber-100">
@@ -810,30 +787,23 @@ export default function MarketDashboard({
         <main
           id="main-content"
           tabIndex={-1}
-          className="market-main mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
+          className="market-main mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-10 lg:py-7"
         >
-          <section className="market-intro mb-6" aria-labelledby="market-title">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-accent-foreground">
-              <Sparkles className="size-4 text-primary" aria-hidden="true" />
-              {english
-                ? 'Gold prices, explained clearly'
-                : ''}
-            </div>
+          <section className="market-intro mb-4" aria-labelledby="market-title">
             <h1
               id="market-title"
               className="max-w-3xl font-heading text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl"
             >
               {english ? 'Vietnam gold prices today' : 'Giá vàng hôm nay'}
             </h1>
-
           </section>
           <section
-            className="market-selection mb-5 rounded-2xl border border-border bg-[var(--surface-solid)] p-4 shadow-sm sm:p-5"
+            className="market-selection mb-4 rounded-2xl border border-border bg-[var(--surface-solid)] p-3 shadow-sm sm:p-4"
             aria-label={english ? 'Choose gold price' : 'Chọn giá vàng'}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
-                <p className="mb-1 text-sm font-semibold">
+                <p className="sr-only">
                   {english
                     ? 'Choose a brand and gold type'
                     : 'Chọn thương hiệu và loại vàng'}
@@ -879,179 +849,174 @@ export default function MarketDashboard({
                 </Button>
               </div>
             </div>
-
           </section>
-          {priceStatus}
-
-          {mode !== 'live' || olderPublication ? (
-            <div className="mb-3 flex items-start gap-2 rounded-[16px] border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
-              {mode === 'live' ? (
-                <Info className="mt-0.5 size-3.5 shrink-0" />
-              ) : (
-                <WifiOff className="mt-0.5 size-3.5 shrink-0" />
-              )}
-              {mode === 'connecting'
-                ? english
-                  ? 'Connecting to the market-price source…'
-                  : 'Đang kết nối tới nguồn giá thị trường…'
-                : mode === 'unavailable'
-                  ? (displayedUnavailableReason ??
-                    (english
-                      ? `${displayedCompany.name} has no available price data.`
-                      : `${selectedCompany.name} chưa có dữ liệu giá khả dụng.`))
-                  : mode === 'fallback'
-                    ? english
-                      ? 'The live source is temporarily unavailable. The latest historical snapshot is shown and is not treated as a current price.'
-                      : 'Nguồn trực tiếp tạm thời không phản hồi. Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.'
-                    : mode === 'delayed'
+          <ChartEntryViewport>
+            {mode !== 'live' || olderPublication ? (
+              <div className="mb-3 flex items-start gap-2 rounded-[16px] border border-amber-400/35 bg-amber-100/55 px-3 py-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
+                {mode === 'live' ? (
+                  <Info className="mt-0.5 size-3.5 shrink-0" />
+                ) : (
+                  <WifiOff className="mt-0.5 size-3.5 shrink-0" />
+                )}
+                {mode === 'connecting'
+                  ? english
+                    ? 'Connecting to the market-price source…'
+                    : 'Đang kết nối tới nguồn giá thị trường…'
+                  : mode === 'unavailable'
+                    ? (displayedUnavailableReason ??
+                      (english
+                        ? `${displayedCompany.name} has no available price data.`
+                        : `${selectedCompany.name} chưa có dữ liệu giá khả dụng.`))
+                    : mode === 'fallback'
                       ? english
-                        ? 'Showing the latest available historical data.'
-                        : 'Đang hiển thị dữ liệu lịch sử gần nhất.'
-                      : english
-                        ? `The source published this quote ${sourceAge}. Check the publication time before trading.`
-                        : `Nguồn công bố giá này ${sourceAge}. Hãy đối chiếu thời điểm công bố trước khi giao dịch.`}
-            </div>
-          ) : null}
+                        ? 'The latest historical snapshot is shown and is not treated as a current price.'
+                        : 'Đang hiển thị dữ liệu lưu gần nhất; hãy đối chiếu lại trước khi giao dịch.'
+                      : mode === 'delayed'
+                        ? english
+                          ? 'Showing the latest available historical data.'
+                          : 'Đang hiển thị dữ liệu lịch sử gần nhất.'
+                        : english
+                          ? `Check the publication time before trading.`
+                          : `Hãy đối chiếu thời điểm công bố trước khi giao dịch.`}
+              </div>
+            ) : null}
 
-          {hasMarketData ? (
-            <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <article className="metric-card metric-card--gold metric-card--quote sm:col-span-2 xl:col-span-2">
-                  <div className="metric-quote-row">
+            {hasMarketData ? (
+              <>
+                <PriceChart
+                  key={`${companyId}-${productId}`}
+                  companyId={companyId}
+                  productId={productId}
+                  data={data}
+                  productLabel={displayedProduct.shortLabel}
+                  rangeLabel={
+                    english
+                      ? range === '7N'
+                        ? '7 days'
+                        : '1 month'
+                      : selectedRange.label
+                  }
+                  range={range}
+                  locale={locale}
+                  displayUnit={displayUnit}
+                  historySource={displayedHistorySource}
+                  onRangeChange={setRange}
+                />
+                {priceStatus}
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <article className="metric-card metric-card--gold metric-card--quote sm:col-span-2 xl:col-span-2">
+                    <div className="metric-quote-row">
+                      <div className="flex items-start justify-between">
+                        <p className="metric-label">
+                          {english ? 'Dealer sells' : 'Cửa hàng bán ra'}
+                        </p>
+                        <ChangeBadge
+                          value={daySellChange}
+                          displayUnit={displayUnit}
+                          english={english}
+                        />
+                      </div>
+                      <p className="metric-value">
+                        {formatVnd(currentQuote?.sell, displayUnit)}
+                        <span className="metric-value__unit">
+                          {displayUnitLabel(displayUnit, english)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="metric-quote-row mt-4 border-t border-border/70 pt-4">
+                      <div className="flex items-start justify-between">
+                        <p className="metric-label">
+                          {english ? 'Dealer buys' : 'Cửa hàng mua vào'}
+                        </p>
+                        <ChangeBadge
+                          value={dayBuyChange}
+                          displayUnit={displayUnit}
+                          english={english}
+                        />
+                      </div>
+                      <p className="metric-value">
+                        {formatVnd(currentQuote?.buy, displayUnit)}
+                        <span className="metric-value__unit">
+                          {displayUnitLabel(displayUnit, english)}
+                        </span>
+                      </p>
+                    </div>
+                  </article>
+                  <article className="metric-card">
                     <div className="flex items-start justify-between">
                       <p className="metric-label">
                         {english
-                          ? 'Dealer sells'
-                          : 'Cửa hàng bán ra'}
+                          ? 'Buy–sell difference'
+                          : 'Chênh lệch giá mua và bán'}
                       </p>
-                      <ChangeBadge
-                        value={daySellChange}
-                        displayUnit={displayUnit}
-                        english={english}
-                      />
+                      <span className="status-badge">
+                        {english ? 'Current' : 'Hiện tại'}
+                      </span>
                     </div>
                     <p className="metric-value">
-                      {formatVnd(currentQuote?.sell, displayUnit)}
+                      {formatVnd(
+                        currentQuote
+                          ? currentQuote.sell - currentQuote.buy
+                          : null,
+                        displayUnit,
+                      )}
                       <span className="metric-value__unit">
                         {displayUnitLabel(displayUnit, english)}
                       </span>
                     </p>
-
-                  </div>
-                  <div className="metric-quote-row mt-4 border-t border-border/70 pt-4">
+                    <p className="metric-unit">
+                      {english
+                        ? 'Before making charges'
+                        : 'Chưa tính phí gia công'}
+                    </p>
+                  </article>
+                  <article className="metric-card metric-card--signal">
                     <div className="flex items-start justify-between">
                       <p className="metric-label">
                         {english
-                          ? 'Dealer buys'
-                          : 'Cửa hàng mua vào'}
+                          ? 'Change in the period'
+                          : 'Thay đổi trong thời gian đang xem'}
                       </p>
-                      <ChangeBadge
-                        value={dayBuyChange}
-                        displayUnit={displayUnit}
-                        english={english}
-                      />
+                      {isUptrend ? (
+                        <TrendingUp className="size-5 text-emerald-700 dark:text-emerald-300" />
+                      ) : (
+                        <TrendingDown className="size-5 text-red-700 dark:text-red-300" />
+                      )}
                     </div>
-                    <p className="metric-value">
-                      {formatVnd(currentQuote?.buy, displayUnit)}
-                      <span className="metric-value__unit">
-                        {displayUnitLabel(displayUnit, english)}
-                      </span>
+                    <p
+                      className={`mt-7 text-xl font-semibold tracking-[-0.03em] ${isUptrend ? 'text-emerald-900 dark:text-emerald-200' : 'text-red-900 dark:text-red-200'}`}
+                    >
+                      {percent >= 0
+                        ? english
+                          ? `Up ${percent.toFixed(1)}%`
+                          : `Tăng ${percent.toFixed(1)}%`
+                        : english
+                          ? `Down ${Math.abs(percent).toFixed(1)}%`
+                          : `Giảm ${Math.abs(percent).toFixed(1)}%`}
                     </p>
-
-                  </div>
-                </article>
-                <article className="metric-card">
-                  <div className="flex items-start justify-between">
-                    <p className="metric-label">
+                    <p className="metric-unit">
                       {english
-                        ? 'Buy–sell difference'
-                        : 'Chênh lệch giá mua và bán'}
+                        ? 'Compared with the first price in this period'
+                        : 'So với giá đầu kỳ đã chọn'}
                     </p>
-                    <span className="status-badge">
-                      {english ? 'Current' : 'Hiện tại'}
-                    </span>
-                  </div>
-                  <p className="metric-value">
-                    {formatVnd(
-                      currentQuote
-                        ? currentQuote.sell - currentQuote.buy
-                        : null,
-                      displayUnit,
-                    )}
-                    <span className="metric-value__unit">
-                      {displayUnitLabel(displayUnit, english)}
-                    </span>
-                  </p>
-                  <p className="metric-unit">
-                    {english
-                      ? 'Before making charges'
-                      : 'Chưa tính phí gia công'}
-                  </p>
-                </article>
-                <article className="metric-card metric-card--signal">
-                  <div className="flex items-start justify-between">
-                    <p className="metric-label">
-                      {english
-                        ? 'Change in the period'
-                        : 'Thay đổi trong thời gian đang xem'}
-                    </p>
-                    {isUptrend ? (
-                      <TrendingUp className="size-5 text-emerald-700 dark:text-emerald-300" />
-                    ) : (
-                      <TrendingDown className="size-5 text-red-700 dark:text-red-300" />
-                    )}
-                  </div>
-                  <p
-                    className={`mt-7 text-xl font-semibold tracking-[-0.03em] ${isUptrend ? 'text-emerald-900 dark:text-emerald-200' : 'text-red-900 dark:text-red-200'}`}
-                  >
-                    {percent >= 0
-                      ? english
-                        ? `Up ${percent.toFixed(1)}%`
-                        : `Tăng ${percent.toFixed(1)}%`
-                      : english
-                        ? `Down ${Math.abs(percent).toFixed(1)}%`
-                        : `Giảm ${Math.abs(percent).toFixed(1)}%`}
-                  </p>
-                  <p className="metric-unit">
-                    {english
-                      ? 'Compared with the first price in this period'
-                      : 'So với giá đầu kỳ đã chọn'}
-                  </p>
-                </article>
-              </section>
+                  </article>
+                </section>
 
-              {quickTools}
-
-              <PriceChart
-                key={`${companyId}-${productId}`}
-                companyId={companyId}
-                productId={productId}
-                data={data}
-                productLabel={displayedProduct.shortLabel}
-                rangeLabel={
-                  english
-                    ? range === '7N'
-                      ? '7 days'
-                      : '1 month'
-                    : selectedRange.label
-                }
-                range={range}
+                {quickTools}
+              </>
+            ) : mode === 'connecting' ? (
+              <MarketSkeleton />
+            ) : (
+              <UnavailablePanel
+                companyName={displayedCompany.name}
+                productName={displayedProduct.label}
+                reason={displayedUnavailableReason}
                 locale={locale}
-                displayUnit={displayUnit}
-                historySource={displayedHistorySource}
-                onRangeChange={setRange}
               />
-            </>
-          ) : mode === 'connecting' ? (
-            <MarketSkeleton />
-          ) : (
-            <UnavailablePanel
-              companyName={displayedCompany.name}
-              productName={displayedProduct.label}
-              reason={displayedUnavailableReason}
-              locale={locale}
-            />
-          )}
+            )}
+          </ChartEntryViewport>
+
+          {!hasMarketData && priceStatus}
 
           <section
             className="ai-home-panel mb-6 mt-6 rounded-3xl border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,var(--surface-solid))] p-5 shadow-sm sm:p-6"
@@ -1071,7 +1036,6 @@ export default function MarketDashboard({
                     ? 'Understand today’s gold price in plain language'
                     : 'Hiểu giá vàng hôm nay bằng lời dễ hiểu'}
                 </h2>
-
               </div>
               <AnalysisRouteLink
                 companyId={companyId}

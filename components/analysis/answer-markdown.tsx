@@ -11,7 +11,7 @@ export function AnswerMarkdown({
   citations?: Citation[];
 }) {
   return (
-    <div className="min-w-0 space-y-3 break-words [&_h3]:font-semibold [&_h2]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:pl-3">
+    <div className="min-w-0 space-y-4 break-words text-sm leading-7 sm:text-base [&_h3]:pt-2 [&_h3]:font-semibold [&_h2]:pt-2 [&_h2]:font-semibold [&_p]:my-3 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:pl-3">
       <Markdown
         remarkPlugins={[remarkGfm]}
         skipHtml

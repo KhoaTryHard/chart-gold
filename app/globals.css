@@ -2099,7 +2099,8 @@
 
 @media (max-width: 639px) {
   .market-filter-controls {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   }
   .market-filter-controls > label {
     width: 100%;

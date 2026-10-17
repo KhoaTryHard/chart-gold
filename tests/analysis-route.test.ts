@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   classify: vi.fn(),
   checkRateLimit: vi.fn(),
   rateLimitKey: vi.fn(),
+  ledger: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/auth', () => ({
@@ -18,6 +19,9 @@ vi.mock('@/lib/analysis/market-context', () => ({
 vi.mock('@/lib/analysis/provider', () => ({
   classifyIntent: mocks.classify,
   createAnalysisProvider: () => ({ name: 'test', analyze: mocks.analyze }),
+}));
+vi.mock('@/lib/server/portfolio-ledger', () => ({
+  readPortfolioLedgerForSession: mocks.ledger,
 }));
 vi.mock('@/lib/server/rate-limit', () => ({
   checkRateLimit: mocks.checkRateLimit,
@@ -46,7 +50,10 @@ function req(
   });
 }
 function configure() {
-  mocks.checkRateLimit.mockResolvedValue({ allowed: true, retryAfterMs: 1_000 });
+  mocks.checkRateLimit.mockResolvedValue({
+    allowed: true,
+    retryAfterMs: 1_000,
+  });
   mocks.rateLimitKey.mockReturnValue('test-key');
   mocks.auth.mockResolvedValue({
     user: { email: 'admin@example.com', isAdmin: true },
@@ -72,6 +79,62 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe('analysis SSE route', () => {
+  it('analyzes a typed holding without reading the account ledger', async () => {
+    configure();
+    const response = await POST(
+      req({
+        ...body,
+        responseVersion: 2,
+        inputMode: 'question',
+        usePortfolioLedger: false,
+        question:
+          'Tôi đang giữ 2 chỉ SJC, giá vốn 140 triệu/lượng, tính lãi/lỗ',
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('event: done');
+    expect(mocks.ledger).not.toHaveBeenCalled();
+    expect(mocks.load.mock.calls[0][5].holdings[0]).toMatchObject({
+      quantityLuong: 0.2,
+      costPerLuongVnd: 140e6,
+    });
+    expect(mocks.load.mock.calls[0][7]).toBeUndefined();
+  });
+
+  it('reads the authoritative account ledger only when opted in', async () => {
+    configure();
+    const ledger = {
+      version: 1,
+      transactions: [
+        {
+          id: 'position',
+          date: '2026-10-17',
+          side: 'buy',
+          companyId: 'sjc',
+          productId: 'bar-1l',
+          quantityLuong: 1,
+          unitPriceVnd: 140e6,
+          feesVnd: 0,
+          note: '',
+        },
+      ],
+    };
+    mocks.ledger.mockResolvedValue({ version: 4, ledger });
+    const response = await POST(
+      req({
+        ...body,
+        responseVersion: 2,
+        usePortfolioLedger: true,
+        goal: 'hold',
+        ledgerVersion: 4,
+        question: 'Xem lãi/lỗ từ Sổ vàng của tôi.',
+      }),
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(mocks.ledger).toHaveBeenCalledOnce();
+    expect(mocks.load.mock.calls[0][7]).toEqual(ledger);
+  });
   it('checks origin, authentication and the exact company/product pair', async () => {
     configure();
     expect((await POST(req(body, 'https://foreign.example'))).status).toBe(403);
@@ -82,28 +145,32 @@ describe('analysis SSE route', () => {
   });
   it('rejects an invalid portfolio ledger before using a provider or quota', async () => {
     configure();
-    const response = await POST(req({
-      ...body,
-      question: 'Hôm nay danh mục của tôi có chốt lời được chưa?',
-      responseVersion: 2,
-      locale: 'vi',
-      goal: 'buy',
-      usePortfolioLedger: true,
-      portfolioLedger: {
-        version: 1,
-        transactions: [{
-          id: 'oversold',
-          date: '2026-09-05',
-          side: 'sell',
-          companyId: 'sjc',
-          productId: 'bar-1l',
-          quantityLuong: 1,
-          unitPriceVnd: 150_000_000,
-          feesVnd: 0,
-          note: '',
-        }],
-      },
-    }));
+    const response = await POST(
+      req({
+        ...body,
+        question: 'Hôm nay danh mục của tôi có chốt lời được chưa?',
+        responseVersion: 2,
+        locale: 'vi',
+        goal: 'buy',
+        usePortfolioLedger: true,
+        portfolioLedger: {
+          version: 1,
+          transactions: [
+            {
+              id: 'oversold',
+              date: '2026-09-05',
+              side: 'sell',
+              companyId: 'sjc',
+              productId: 'bar-1l',
+              quantityLuong: 1,
+              unitPriceVnd: 150_000_000,
+              feesVnd: 0,
+              note: '',
+            },
+          ],
+        },
+      }),
+    );
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: 'INVALID_LEDGER' });
     expect(mocks.load).not.toHaveBeenCalled();

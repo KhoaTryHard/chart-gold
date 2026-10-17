@@ -1,6 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 
+async function sendQuestion(page: Page) {
+  const question = page.getByLabel('Câu hỏi phân tích', { exact: true });
+  if (!(await question.inputValue()).trim())
+    await question.fill('Giá vàng SJC hôm nay?');
+  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+}
+
 async function login(page: Page) {
   const token = await encode({
     secret: process.env.E2E_AUTH_SECRET ?? 'e2e-auth-secret',
@@ -40,21 +47,138 @@ test.beforeEach(async ({ page }) => {
         version: 1,
         ledger: {
           version: 1,
-          transactions: [{
-            id: 'e2e-ledger-buy',
-            date: '2026-09-25',
-            side: 'buy',
-            companyId: 'sjc',
-            productId: 'bar-1l',
-            quantityLuong: 1,
-            unitPriceVnd: 145000000,
-            feesVnd: 0,
-            note: '',
-          }],
+          transactions: [
+            {
+              id: 'e2e-ledger-buy',
+              date: '2026-09-25',
+              side: 'buy',
+              companyId: 'sjc',
+              productId: 'bar-1l',
+              quantityLuong: 1,
+              unitPriceVnd: 145000000,
+              feesVnd: 0,
+              note: '',
+            },
+          ],
         },
       },
     }),
   );
+});
+
+test('starts empty and uses suggested questions only after a deliberate click', async ({
+  page,
+}) => {
+  let ledgerRequests = 0;
+  page.on('request', (request) => {
+    if (request.url().includes('/api/portfolio/ledger')) ledgerRequests++;
+  });
+  await page.goto('/phan-tich');
+  const input = page.getByLabel('Câu hỏi phân tích', { exact: true });
+  await expect(input).toHaveValue('');
+  await expect(
+    page.getByRole('button', { name: 'Phân tích', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText('Đang dùng Sổ vàng', { exact: true }),
+  ).toHaveCount(0);
+  const options = page
+    .locator('.ai-question-panel details:visible')
+    .filter({ hasText: 'Tùy chọn' });
+  await expect(options).toHaveCount(1);
+  await expect(options).not.toHaveAttribute('open');
+  await page
+    .getByRole('button', {
+      name: 'Giá vàng hôm nay thay đổi thế nào?',
+      exact: true,
+    })
+    .click();
+  await expect(input).toHaveValue('Giá vàng hôm nay thay đổi thế nào?');
+  expect(ledgerRequests).toBe(0);
+});
+
+test('removing ledger context lets the user analyze a typed position independently', async ({
+  page,
+}) => {
+  await login(page);
+  await page.route('**/api/analysis/prepare', (route) =>
+    route.fulfill({
+      json: {
+        access: adminAccess,
+        authenticated: true,
+        ready: true,
+        needs: [],
+      },
+    }),
+  );
+  let payload: Record<string, unknown> | null = null;
+  await page.route('**/api/analysis', (route) => {
+    payload = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"delta","delta":"Lãi/lỗ theo vị thế tự khai."}\n\ndata: {"type":"done","model":"test","completion":"complete"}\n\n',
+    });
+  });
+  await page.goto('/phan-tich');
+  await page
+    .getByRole('button', {
+      name: 'Xem lãi/lỗ từ Sổ vàng của tôi.',
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText('Đang dùng Sổ vàng', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Bỏ dùng Sổ vàng', exact: true })
+    .click();
+  await page
+    .getByLabel('Câu hỏi phân tích', { exact: true })
+    .fill('Tôi giữ 2 chỉ SJC, giá vốn 140 triệu/lượng, lãi bao nhiêu?');
+  await sendQuestion(page);
+  await expect(
+    page.getByText('Lãi/lỗ theo vị thế tự khai.', { exact: true }),
+  ).toBeVisible();
+  expect(payload).toMatchObject({ usePortfolioLedger: false });
+  expect(payload).not.toHaveProperty('portfolioLedger');
+  await expect(
+    page.getByLabel('Câu hỏi phân tích', { exact: true }),
+  ).toHaveValue('');
+});
+
+test('restores the Google sign-in draft while preserving explicit ledger opt-out', async ({
+  page,
+}) => {
+  await login(page);
+  await page.addInitScript(() =>
+    sessionStorage.setItem(
+      'kim-tuyen:ai-draft',
+      JSON.stringify({
+        goal: 'hold',
+        useLedger: false,
+        depth: 'deep',
+        companyId: 'sjc',
+        productId: 'bar-1l',
+        range: '1T',
+        question: 'Tôi đang giữ 2 chỉ SJC, giá vốn 140 triệu/lượng',
+      }),
+    ),
+  );
+  await page.goto('/phan-tich?ai=resume');
+  await expect(
+    page.getByLabel('Câu hỏi phân tích', { exact: true }),
+  ).toHaveValue('Tôi đang giữ 2 chỉ SJC, giá vốn 140 triệu/lượng');
+  await expect(
+    page.getByText('Đang dùng Sổ vàng', { exact: true }),
+  ).toHaveCount(0);
+  const options = page
+    .locator('.ai-question-panel details:visible')
+    .filter({ hasText: 'Tùy chọn' });
+  await options.locator('summary').click();
+  await expect(options.getByRole('checkbox')).toBeChecked();
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('kim-tuyen:ai-draft')),
+  ).toBeNull();
 });
 
 test('signed-in user completes prepare → analysis without another OAuth redirect', async ({
@@ -63,12 +187,20 @@ test('signed-in user completes prepare → analysis without another OAuth redire
   await login(page);
   let calls = 0;
   await page.route('**/api/analysis/prepare', async (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { access: adminAccess } });
-    return route.fulfill({ json: { ready: true, authenticated: true, access: adminAccess, needs: [] } });
+    if (route.request().method() === 'GET')
+      return route.fulfill({ json: { access: adminAccess } });
+    return route.fulfill({
+      json: {
+        ready: true,
+        authenticated: true,
+        access: adminAccess,
+        needs: [],
+      },
+    });
   });
   await page.route('**/api/analysis', async (route) => {
     calls++;
-    expect(route.request().postDataJSON().goal).toBe('hold');
+    expect(route.request().postDataJSON().usePortfolioLedger).toBe(false);
     await route.fulfill({
       contentType: 'text/event-stream',
       body: 'event: delta\ndata: {"type":"delta","delta":"Đã tính theo giá thu mua và phí đã khai."}\n\nevent: done\ndata: {"type":"done","model":"test","completion":"complete","requestId":"flow-test"}\n\n',
@@ -78,9 +210,13 @@ test('signed-in user completes prepare → analysis without another OAuth redire
   await expect(
     page.getByRole('button', { name: 'Mở menu tài khoản' }),
   ).toBeVisible();
-  await expect(page.getByText('Thông tin lượt này', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Khoảng thời gian', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+  await expect(
+    page.getByText('Thông tin lượt này', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('Khoảng thời gian', { exact: true }),
+  ).toHaveCount(0);
+  await sendQuestion(page);
   await expect(
     page.getByText('Đã tính theo giá thu mua và phí đã khai.', { exact: true }),
   ).toBeVisible();
@@ -88,7 +224,7 @@ test('signed-in user completes prepare → analysis without another OAuth redire
   await expect(page).toHaveURL(/\/phan-tich$/);
 });
 
-test('places data notes after the explanation and keeps them collapsed by default', async ({
+test('removes generic decisions and keeps sources collapsed after the answer', async ({
   page,
 }) => {
   await login(page);
@@ -110,32 +246,49 @@ test('places data notes after the explanation and keeps them collapsed by defaul
       body: [
         'event: decision\ndata: {"type":"decision","payload":{"responseVersion":2,"headline":"Đủ dữ liệu để tham khảo.","stance":"review","summary":"Kết luận phụ thuộc vào các điều kiện hiển thị.","conditions":["Xác nhận lại giá mua vào."],"factKeys":[],"nextSteps":["So sánh giá mua vào"]}}\n\n',
         'event: delta\ndata: {"type":"delta","delta":"Giải thích từ AI."}\n\n',
+        'event: sources\ndata: {"type":"sources","sources":[{"title":"SJC","url":"https://sjc.com.vn"}]}\n\n',
         'event: done\ndata: {"type":"done","model":"test","completion":"complete"}\n\n',
       ].join(''),
     });
   });
   await page.goto('/phan-tich');
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
-  await expect(page.getByText('Giải thích từ AI.', { exact: true })).toBeVisible();
+  await sendQuestion(page);
+  await expect(
+    page.getByText('Giải thích từ AI.', { exact: true }),
+  ).toBeVisible();
 
-  const notes = page.locator('details').filter({ hasText: 'Lưu ý theo dữ liệu' });
+  const notes = page.locator('details').filter({ hasText: 'Nguồn và dữ liệu' });
   await expect(notes).toHaveCount(1);
   await expect(notes).not.toHaveAttribute('open');
-  await expect(page.getByText('Đủ dữ liệu để tham khảo.', { exact: true })).toBeHidden();
-
+  await expect(
+    page.getByText('Đủ dữ liệu để tham khảo.', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'So sánh giá mua vào', exact: true }),
+  ).toHaveCount(0);
   await notes.locator('summary').focus();
   await notes.locator('summary').press('Enter');
   await expect(notes).toHaveAttribute('open', '');
-  await expect(page.getByText('Đủ dữ liệu để tham khảo.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Xác nhận lại giá mua vào.', { exact: true })).toBeVisible();
+  await expect(
+    notes.getByRole('link', { name: 'SJC', exact: true }),
+  ).toBeVisible();
 });
 
-test('replaces an interrupted partial answer after the reset event', async ({ page }) => {
+test('replaces an interrupted partial answer after the reset event', async ({
+  page,
+}) => {
   await login(page);
   await page.route('**/api/analysis/prepare', async (route) => {
     if (route.request().method() === 'GET')
       return route.fulfill({ json: { access: adminAccess } });
-    return route.fulfill({ json: { ready: true, authenticated: true, access: adminAccess, needs: [] } });
+    return route.fulfill({
+      json: {
+        ready: true,
+        authenticated: true,
+        access: adminAccess,
+        needs: [],
+      },
+    });
   });
   await page.route('**/api/analysis', async (route) =>
     route.fulfill({
@@ -149,12 +302,16 @@ test('replaces an interrupted partial answer after the reset event', async ({ pa
     }),
   );
   await page.goto('/phan-tich');
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+  await sendQuestion(page);
   await expect(page.getByText('Kết quả mới', { exact: true })).toBeVisible();
-  await expect(page.getByText('Nội dung dở dang', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Nội dung dở dang', { exact: true })).toHaveCount(
+    0,
+  );
 });
 
-test('uses the signed-in account ledger for hold analysis without manual inputs', async ({ page }) => {
+test('uses the signed-in account ledger for hold analysis without manual inputs', async ({
+  page,
+}) => {
   await login(page);
   await page.route('**/api/portfolio/ledger', (route) =>
     route.fulfill({
@@ -162,26 +319,34 @@ test('uses the signed-in account ledger for hold analysis without manual inputs'
         version: 4,
         ledger: {
           version: 1,
-          transactions: [{
-            id: 'ledger-buy-1',
-            date: '2026-09-25',
-            side: 'buy',
-            companyId: 'sjc',
-            productId: 'bar-1l',
-            quantityLuong: 0.1,
-            unitPriceVnd: 145000000,
-            feesVnd: 0,
-            note: '',
-          }],
+          transactions: [
+            {
+              id: 'ledger-buy-1',
+              date: '2026-09-25',
+              side: 'buy',
+              companyId: 'sjc',
+              productId: 'bar-1l',
+              quantityLuong: 0.1,
+              unitPriceVnd: 145000000,
+              feesVnd: 0,
+              note: '',
+            },
+          ],
         },
       },
     }),
   );
   await page.goto('/phan-tich?preset=hold');
-  await expect(page.getByText('Sổ vàng của bạn', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Đang dùng Sổ vàng', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/Đang giữ 0\.1000 lượng/)).toBeVisible();
-  await expect(page.getByLabel('Số lượng (lượng)', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Giá vốn (triệu/lượng)', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByLabel('Số lượng (lượng)', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('Giá vốn (triệu/lượng)', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('server session failure never triggers OAuth; retries and double clicks are bounded', async ({
@@ -247,7 +412,7 @@ test('expired server session shows an explicit login action instead of redirecti
   await expect(
     page.getByRole('button', { name: 'Mở menu tài khoản' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+  await sendQuestion(page);
   await expect(
     page
       .locator('[role="alert"]')
@@ -272,8 +437,10 @@ test('missing information and closed AI access stay on the page without consumin
   await expect(
     page.getByRole('button', { name: 'Mở menu tài khoản' }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: /Tôi định mua/ }).click();
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+  await page
+    .getByLabel('Câu hỏi phân tích', { exact: true })
+    .fill('Tôi nên mua vàng nào hôm nay?');
+  await sendQuestion(page);
   await expect(page.getByText('Hãy bổ sung:', { exact: true })).toBeVisible();
   expect(analysis).toBe(0);
   await page.route('**/api/analysis/prepare', async (route) =>
@@ -292,7 +459,7 @@ test('missing information and closed AI access stay on the page without consumin
       },
     }),
   );
-  await page.getByRole('button', { name: 'Phân tích', exact: true }).click();
+  await sendQuestion(page);
   await expect(
     page.locator('[role="alert"]').filter({ hasText: 'chưa được cấp quyền' }),
   ).toBeVisible();
@@ -300,12 +467,23 @@ test('missing information and closed AI access stay on the page without consumin
   await expect(page).toHaveURL(/\/phan-tich$/);
 });
 
-test('mobile question workspace has one column and no context form', async ({ page }) => {
+test('mobile question workspace has one column and no context form', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto('/phan-tich');
-  await expect(page.getByRole('button', { name: 'Mở menu tài khoản' })).toBeVisible();
-  await expect(page.getByText('Thông tin lượt này', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Số lượng (lượng)', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.ai-content-grid')).toHaveCSS('max-width', '1040px');
+  await expect(
+    page.getByRole('button', { name: 'Mở menu tài khoản' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Thông tin lượt này', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('Số lượng (lượng)', { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator('.ai-content-grid')).toHaveCSS(
+    'max-width',
+    '1040px',
+  );
 });

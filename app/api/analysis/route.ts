@@ -39,6 +39,7 @@ import {
 } from '@/lib/analysis/response';
 import type { AnalysisDecision, AnalysisFacts } from '@/lib/analysis/response';
 import { ANALYSIS_PROMPT_VERSION } from '@/lib/analysis/experience';
+import { usesAccountLedger } from '@/lib/analysis/focus';
 import { investorProfileSchema } from '@/lib/analysis/investor-profile';
 import { inspectLedgerIntegrity } from '@/lib/portfolio-ledger';
 import { recordAnalysisRun } from '@/lib/analysis/telemetry';
@@ -51,7 +52,10 @@ import { readJsonBody, RequestBodyTooLargeError } from '@/lib/server/body';
 import { isTrustedOrigin } from '@/lib/server/origin';
 import { readPortfolioLedgerForSession } from '@/lib/server/portfolio-ledger';
 import { localeFromCookieHeader, type Locale } from '@/lib/i18n';
-import { inferQuestionContext, type QuestionContext } from '@/lib/analysis/question-context';
+import {
+  inferQuestionContext,
+  type QuestionContext,
+} from '@/lib/analysis/question-context';
 
 function isProviderFailure(error: unknown): error is {
   code: string;
@@ -60,14 +64,26 @@ function isProviderFailure(error: unknown): error is {
 } {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      typeof (error as { code?: unknown }).code === 'string',
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string',
   );
 }
 
-function isConversationFailure(error: unknown): error is { code: string; status: number; message: string; details?: Record<string, unknown> } {
-  return Boolean(error && typeof error === 'object' && 'code' in error && String((error as { code?: unknown }).code).startsWith('CONVERSATION_'));
+function isConversationFailure(
+  error: unknown,
+): error is {
+  code: string;
+  status: number;
+  message: string;
+  details?: Record<string, unknown>;
+} {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    String((error as { code?: unknown }).code).startsWith('CONVERSATION_'),
+  );
 }
 
 export const runtime = 'nodejs';
@@ -82,16 +98,27 @@ function jsonError(
   const englishMessages: Record<string, string> = {
     'Yêu cầu không hợp lệ.': 'Invalid request.',
     'Vui lòng đăng nhập bằng Google.': 'Sign in with Google to continue.',
-    'Câu hỏi, hồ sơ hoặc cặp công ty/sản phẩm không hợp lệ.': 'The question, profile, or dealer/product selection is invalid.',
+    'Câu hỏi, hồ sơ hoặc cặp công ty/sản phẩm không hợp lệ.':
+      'The question, profile, or dealer/product selection is invalid.',
     'Payload quá lớn.': 'The request is too large.',
     'Không thể đọc yêu cầu.': 'Unable to read the request.',
-    'Đang có một phiên phân tích khác đang chạy.': 'Another analysis is already running.',
-    'Tài khoản hiện chưa có lượt AI khả dụng.': 'This account has no AI requests available.',
-    'Yêu cầu đã hết thời gian hoặc bị dừng.': 'The request timed out or was stopped.',
+    'Đang có một phiên phân tích khác đang chạy.':
+      'Another analysis is already running.',
+    'Tài khoản hiện chưa có lượt AI khả dụng.':
+      'This account has no AI requests available.',
+    'Yêu cầu đã hết thời gian hoặc bị dừng.':
+      'The request timed out or was stopped.',
     'Không thể bắt đầu phân tích.': 'Unable to start the analysis.',
   };
   return Response.json(
-    { error: locale === 'en' ? englishMessages[error] ?? 'The request could not be completed. Please try again.' : error, ...details },
+    {
+      error:
+        locale === 'en'
+          ? (englishMessages[error] ??
+            'The request could not be completed. Please try again.')
+          : error,
+      ...details,
+    },
     { status, headers: { 'X-Content-Type-Options': 'nosniff' } },
   );
 }
@@ -124,7 +151,12 @@ export async function POST(request: Request) {
     session = await abortable(auth(), controller.signal);
     if (!session?.user?.email) {
       clear();
-      return jsonError('Vui lòng đăng nhập bằng Google.', 401, {}, requestLocale);
+      return jsonError(
+        'Vui lòng đăng nhập bằng Google.',
+        401,
+        {},
+        requestLocale,
+      );
     }
     const aiRate = await checkRateLimit(
       rateLimitKey('ai-start-minute', session.user.email.toLowerCase()),
@@ -165,28 +197,56 @@ export async function POST(request: Request) {
   let analysisPayload = parsed.data;
   let questionContext: QuestionContext | null = null;
   let conversationMessages = parsed.data.messages;
-  let conversationContext: { id: string; version: number; turns: Array<{ status: string; question: string; answer: string | null }> } | null = null;
+  let conversationContext: {
+    id: string;
+    version: number;
+    turns: Array<{ status: string; question: string; answer: string | null }>;
+  } | null = null;
   if (parsed.data.conversationId && process.env.DATABASE_URL) {
     try {
-      const { getConversation, buildConversationMessages } = await import('@/lib/server/ai-conversations');
+      const { getConversation, buildConversationMessages } =
+        await import('@/lib/server/ai-conversations');
       const owner = await ensureSessionUser(session);
-      conversationContext = await getConversation(owner.id, parsed.data.conversationId);
-      if (parsed.data.conversationVersion !== undefined && parsed.data.conversationVersion !== conversationContext.version) {
+      conversationContext = await getConversation(
+        owner.id,
+        parsed.data.conversationId,
+      );
+      if (
+        parsed.data.conversationVersion !== undefined &&
+        parsed.data.conversationVersion !== conversationContext.version
+      ) {
         clear();
         return jsonError(
-          responseLocale === 'en' ? 'This conversation changed on another device. Reload it before asking a new question.' : 'Cuộc trò chuyện đã thay đổi trên thiết bị khác. Hãy tải lại trước khi hỏi tiếp.',
+          responseLocale === 'en'
+            ? 'This conversation changed on another device. Reload it before asking a new question.'
+            : 'Cuộc trò chuyện đã thay đổi trên thiết bị khác. Hãy tải lại trước khi hỏi tiếp.',
           409,
-          { code: 'CONVERSATION_VERSION_CONFLICT', conversationVersion: conversationContext.version },
+          {
+            code: 'CONVERSATION_VERSION_CONFLICT',
+            conversationVersion: conversationContext.version,
+          },
           responseLocale,
         );
       }
-      conversationMessages = buildConversationMessages(conversationContext.turns as never);
+      conversationMessages = buildConversationMessages(
+        conversationContext.turns as never,
+      );
       analysisPayload = { ...analysisPayload, messages: conversationMessages };
     } catch (error) {
       clear();
       if (isConversationFailure(error))
-        return jsonError(error.message, error.status, { code: error.code, ...error.details }, responseLocale);
-      return jsonError('Không thể tải hội thoại.', 503, { code: 'CONVERSATION_UNAVAILABLE' }, responseLocale);
+        return jsonError(
+          error.message,
+          error.status,
+          { code: error.code, ...error.details },
+          responseLocale,
+        );
+      return jsonError(
+        'Không thể tải hội thoại.',
+        503,
+        { code: 'CONVERSATION_UNAVAILABLE' },
+        responseLocale,
+      );
     }
   }
   if (parsed.data.inputMode === 'question') {
@@ -209,21 +269,50 @@ export async function POST(request: Request) {
       },
     };
   }
-  if (analysisPayload.goal === 'hold') {
-    const portfolio = await abortable(readPortfolioLedgerForSession(session), controller.signal);
+  if (
+    analysisPayload.usePortfolioLedger !== false &&
+    analysisPayload.portfolioLedger
+  ) {
+    const ledgerIntegrity = inspectLedgerIntegrity(
+      analysisPayload.portfolioLedger.transactions,
+    );
+    if (!ledgerIntegrity.valid) clear();
+    if (!ledgerIntegrity.valid)
+      return jsonError(
+        analysisPayload.locale === 'en'
+          ? 'Fix the ledger issues before asking AI to analyze it.'
+          : 'Hãy sửa các lỗi trong sổ trước khi yêu cầu AI phân tích.',
+        400,
+        { code: 'INVALID_LEDGER', issues: ledgerIntegrity.issues },
+        analysisPayload.locale,
+      );
+  }
+  const usingAccountLedger = usesAccountLedger(analysisPayload);
+  if (usingAccountLedger) {
+    const portfolio = await abortable(
+      readPortfolioLedgerForSession(session),
+      controller.signal,
+    );
     if (!portfolio.ledger.transactions.length) {
       clear();
       return jsonError(
-        responseLocale === 'en' ? 'Your Gold Ledger is empty.' : 'Sổ vàng của bạn chưa có giao dịch.',
+        responseLocale === 'en'
+          ? 'Your Gold Ledger is empty.'
+          : 'Sổ vàng của bạn chưa có giao dịch.',
         409,
         { code: 'LEDGER_EMPTY', ledgerVersion: portfolio.version },
         responseLocale,
       );
     }
-    if (analysisPayload.ledgerVersion !== undefined && analysisPayload.ledgerVersion !== portfolio.version) {
+    if (
+      analysisPayload.ledgerVersion !== undefined &&
+      analysisPayload.ledgerVersion !== portfolio.version
+    ) {
       clear();
       return jsonError(
-        responseLocale === 'en' ? 'Your ledger changed. Refresh it before analyzing.' : 'Sổ vàng đã thay đổi. Hãy tải lại trước khi phân tích.',
+        responseLocale === 'en'
+          ? 'Your ledger changed. Refresh it before analyzing.'
+          : 'Sổ vàng đã thay đổi. Hãy tải lại trước khi phân tích.',
         409,
         { code: 'LEDGER_VERSION_CONFLICT', ledgerVersion: portfolio.version },
         responseLocale,
@@ -238,31 +327,34 @@ export async function POST(request: Request) {
   }
   const prepared = prepareAnalysisInput(analysisPayload);
   const payload = prepared.payload;
-  const analysisNeeds = [...(questionContext?.missing ?? []), ...prepared.needs].slice(0, 2);
+  const analysisNeeds = [
+    ...(questionContext?.missing ?? []),
+    ...prepared.needs,
+  ].slice(0, 2);
   const resolvedScenario = prepared.resolvedScenario;
-  if (payload.goal !== 'hold' && payload.usePortfolioLedger !== false && payload.portfolioLedger) {
-    const ledgerIntegrity = inspectLedgerIntegrity(payload.portfolioLedger.transactions);
-    if (!ledgerIntegrity.valid)
-      clear();
-    if (!ledgerIntegrity.valid)
-      return jsonError(
-        payload.locale === 'en'
-          ? 'Fix the ledger issues before asking AI to analyze it.'
-          : 'Hãy sửa các lỗi trong sổ trước khi yêu cầu AI phân tích.',
-        400,
-        { code: 'INVALID_LEDGER', issues: ledgerIntegrity.issues },
-        payload.locale,
-      );
-  }
-  const access = analysisAccess(session, payload.responseVersion ?? 1, payload.locale);
+  const access = analysisAccess(
+    session,
+    payload.responseVersion ?? 1,
+    payload.locale,
+  );
   if (!access.canAnalyze) {
     clear();
-    return jsonError(access.message, 403, { code: access.code }, responseLocale);
+    return jsonError(
+      access.message,
+      403,
+      { code: access.code },
+      responseLocale,
+    );
   }
   const email = session.user.email!.trim().toLowerCase();
   if (activeAnalyses.has(email)) {
     clear();
-    return jsonError('Đang có một phiên phân tích khác đang chạy.', 409, {}, responseLocale);
+    return jsonError(
+      'Đang có một phiên phân tích khác đang chạy.',
+      409,
+      {},
+      responseLocale,
+    );
   }
   const owner = Symbol();
   activeAnalyses.set(email, owner);
@@ -275,8 +367,10 @@ export async function POST(request: Request) {
   let reservationId: string | null = null;
   let reservationCapability: AiCapability = 'standard';
   let reservationSettled = false;
-  let conversationId: string | null = conversationContext?.id ?? parsed.data.conversationId ?? null;
-  let conversationVersion: number | null = conversationContext?.version ?? parsed.data.conversationVersion ?? null;
+  let conversationId: string | null =
+    conversationContext?.id ?? parsed.data.conversationId ?? null;
+  let conversationVersion: number | null =
+    conversationContext?.version ?? parsed.data.conversationVersion ?? null;
   let conversationTurnId: string | null = null;
   let intent;
   let forecast: ForecastResult | undefined;
@@ -375,8 +469,9 @@ export async function POST(request: Request) {
       }
     }
     if (process.env.DATABASE_URL) {
-      const { beginConversationTurn } = await import('@/lib/server/ai-conversations');
-      const owner = billingUser ?? await ensureSessionUser(session);
+      const { beginConversationTurn } =
+        await import('@/lib/server/ai-conversations');
+      const owner = billingUser ?? (await ensureSessionUser(session));
       const begun = await beginConversationTurn({
         userId: owner.id,
         conversationId: parsed.data.conversationId,
@@ -437,16 +532,29 @@ export async function POST(request: Request) {
     clear();
     release();
     if (conversationTurnId) {
-      const { failConversationTurn } = await import('@/lib/server/ai-conversations');
-      void failConversationTurn(conversationTurnId, 'failed').catch(() => undefined);
+      const { failConversationTurn } =
+        await import('@/lib/server/ai-conversations');
+      void failConversationTurn(conversationTurnId, 'failed').catch(
+        () => undefined,
+      );
     }
     if (isConversationFailure(error))
-      return jsonError(error.message, error.status, { code: error.code, ...error.details }, responseLocale);
+      return jsonError(
+        error.message,
+        error.status,
+        { code: error.code, ...error.details },
+        responseLocale,
+      );
     if (error instanceof BillingError)
-      return jsonError(error.message, error.status, {
-        code: error.code,
-        ...error.details,
-      }, responseLocale);
+      return jsonError(
+        error.message,
+        error.status,
+        {
+          code: error.code,
+          ...error.details,
+        },
+        responseLocale,
+      );
     return jsonError(
       controller.signal.aborted
         ? 'Yêu cầu đã hết thời gian hoặc bị dừng.'
@@ -557,12 +665,26 @@ export async function POST(request: Request) {
         }
         if (context) {
           push({ type: 'metadata', context, entitlement });
-          storedCoverage = payload.locale === 'en'
-            ? `${context.eligible ?? 0}/${context.requested ?? 0} groups with sufficient data · ${context.today ?? ''}`
-            : `${context.eligible ?? 0}/${context.requested ?? 0} nhóm đủ dữ liệu · ${context.today ?? ''}`;
+          storedCoverage =
+            payload.locale === 'en'
+              ? `${context.eligible ?? 0}/${context.requested ?? 0} groups with sufficient data · ${context.today ?? ''}`
+              : `${context.eligible ?? 0}/${context.requested ?? 0} nhóm đủ dữ liệu · ${context.today ?? ''}`;
           if (payload.responseVersion === 2) {
-            storedFacts = buildAnalysisFacts(context, intent, payload.goal, payload.locale, forecast);
-            storedDecision = buildAnalysisDecision(context, intent, payload.goal, payload.locale, forecast);
+            storedFacts = buildAnalysisFacts(
+              context,
+              intent,
+              payload.goal,
+              payload.locale,
+              forecast,
+              payload.question,
+            );
+            storedDecision = buildAnalysisDecision(
+              context,
+              intent,
+              payload.goal,
+              payload.locale,
+              forecast,
+            );
             push({
               type: 'facts',
               payload: storedFacts,
@@ -592,9 +714,14 @@ export async function POST(request: Request) {
         providerName = provider.name;
         push({
           type: 'status',
-          message: payload.locale === 'en'
-            ? intent.needsResearch ? 'Researching' : 'Analyzing'
-            : intent.needsResearch ? 'Đang tra cứu' : 'Đang phân tích',
+          message:
+            payload.locale === 'en'
+              ? intent.needsResearch
+                ? 'Researching'
+                : 'Analyzing'
+              : intent.needsResearch
+                ? 'Đang tra cứu'
+                : 'Đang phân tích',
           provider: provider.name,
         });
         providerStarted = true;
@@ -602,6 +729,7 @@ export async function POST(request: Request) {
           {
             question: payload.question,
             messages: conversationMessages,
+            responseVersion: payload.responseVersion,
             goal: payload.goal,
             analysisDepth: payload.analysisDepth,
             scenarioInputs: payload.scenarioInputs,
@@ -638,16 +766,25 @@ export async function POST(request: Request) {
               push({ type: 'sources', sources: [...sourceMap.values()] });
               continue;
             }
-            if (event.type === 'delta' && event.delta) finalAnswer += event.delta;
+            if (event.type === 'delta' && event.delta)
+              finalAnswer += event.delta;
             if (event.type === 'facts') storedFacts = event.payload;
             if (event.type === 'decision') storedDecision = event.payload;
-            if (event.type === 'forecast' && event.forecast && typeof event.forecast === 'object') storedForecast = event.forecast as Record<string, unknown>;
-            if (event.type === 'grounding' && Array.isArray(event.citations)) storedCitations = event.citations as Array<Record<string, unknown>>;
-            if (event.type === 'warning' && typeof event.message === 'string') storedWarning = event.message;
+            if (
+              event.type === 'forecast' &&
+              event.forecast &&
+              typeof event.forecast === 'object'
+            )
+              storedForecast = event.forecast as Record<string, unknown>;
+            if (event.type === 'grounding' && Array.isArray(event.citations))
+              storedCitations = event.citations as Array<
+                Record<string, unknown>
+              >;
+            if (event.type === 'warning' && typeof event.message === 'string')
+              storedWarning = event.message;
             if (event.type === 'status' && event.provider)
               providerName = event.provider;
-            if (event.type === 'status' && event.model)
-              model = event.model;
+            if (event.type === 'status' && event.model) model = event.model;
             if (event.type === 'reset') {
               retryCount = Math.max(retryCount, event.attempt);
               await extendAiUsageReservation({
@@ -669,14 +806,24 @@ export async function POST(request: Request) {
                   event.completion === undefined,
               );
               if (conversationTurnId) {
-                const { completeConversationTurn } = await import('@/lib/server/ai-conversations');
+                const { completeConversationTurn } =
+                  await import('@/lib/server/ai-conversations');
                 await completeConversationTurn({
                   turnId: conversationTurnId,
                   answer: finalAnswer,
-                  facts: storedFacts as unknown as Record<string, unknown> | null,
-                  decision: storedDecision as unknown as Record<string, unknown> | null,
+                  facts: storedFacts as unknown as Record<
+                    string,
+                    unknown
+                  > | null,
+                  decision: storedDecision as unknown as Record<
+                    string,
+                    unknown
+                  > | null,
                   forecast: storedForecast,
-                  sources: [...sourceMap.values()].map((item) => ({ title: item.title, url: item.url })),
+                  sources: [...sourceMap.values()].map((item) => ({
+                    title: item.title,
+                    url: item.url,
+                  })),
                   citations: storedCitations,
                   coverage: storedCoverage,
                   warning: storedWarning,
@@ -685,7 +832,10 @@ export async function POST(request: Request) {
                     requestId,
                     conversationId,
                     turnId: conversationTurnId,
-                    errorName: persistError instanceof Error ? persistError.name : 'UnknownError',
+                    errorName:
+                      persistError instanceof Error
+                        ? persistError.name
+                        : 'UnknownError',
                   });
                 });
               }
@@ -732,8 +882,12 @@ export async function POST(request: Request) {
         failureError = error;
         outcome = controller.signal.aborted ? 'aborted' : 'failed';
         if (conversationTurnId) {
-          const { failConversationTurn } = await import('@/lib/server/ai-conversations');
-          await failConversationTurn(conversationTurnId, controller.signal.aborted ? 'aborted' : 'failed').catch(() => undefined);
+          const { failConversationTurn } =
+            await import('@/lib/server/ai-conversations');
+          await failConversationTurn(
+            conversationTurnId,
+            controller.signal.aborted ? 'aborted' : 'failed',
+          ).catch(() => undefined);
         }
         try {
           await settleUsage(false);
@@ -746,19 +900,19 @@ export async function POST(request: Request) {
         }
         push({
           type: 'error',
-          message: payload.locale === 'en'
-            ? controller.signal.aborted
-              ? 'The request timed out or was stopped.'
-              : 'The analysis could not be completed. Please try again.'
-            : controller.signal.aborted
-              ? 'Yêu cầu đã hết thời gian hoặc bị dừng.'
-              : 'Không thể hoàn tất phân tích. Vui lòng thử lại.',
-          code:
-            controller.signal.aborted
-              ? 'ANALYSIS_ABORTED'
-              : isProviderFailure(error)
-                ? error.code
-                : 'PROVIDER_STREAM_FAILED',
+          message:
+            payload.locale === 'en'
+              ? controller.signal.aborted
+                ? 'The request timed out or was stopped.'
+                : 'The analysis could not be completed. Please try again.'
+              : controller.signal.aborted
+                ? 'Yêu cầu đã hết thời gian hoặc bị dừng.'
+                : 'Không thể hoàn tất phân tích. Vui lòng thử lại.',
+          code: controller.signal.aborted
+            ? 'ANALYSIS_ABORTED'
+            : isProviderFailure(error)
+              ? error.code
+              : 'PROVIDER_STREAM_FAILED',
           provider: providerName || undefined,
           retryable: isProviderFailure(error)
             ? error.code === 'PROVIDER_TIMEOUT' ||
@@ -766,7 +920,9 @@ export async function POST(request: Request) {
               error.code === 'PROVIDER_RATE_LIMITED' ||
               error.code === 'PROVIDER_STREAM_FAILED'
             : false,
-          finishReason: isProviderFailure(error) ? error.finishReason : undefined,
+          finishReason: isProviderFailure(error)
+            ? error.finishReason
+            : undefined,
           requestId,
           refunded: refundConfirmed,
           conversationId: conversationId ?? undefined,
@@ -794,8 +950,12 @@ export async function POST(request: Request) {
             outcome === 'failed' && isProviderFailure(failureError)
               ? failureError.code
               : undefined,
-          failureStatus: isProviderFailure(failureError) ? failureError.status : undefined,
-          finishReason: isProviderFailure(failureError) ? failureError.finishReason : undefined,
+          failureStatus: isProviderFailure(failureError)
+            ? failureError.status
+            : undefined,
+          finishReason: isProviderFailure(failureError)
+            ? failureError.finishReason
+            : undefined,
         });
         if (billingUser) {
           void recordAnalysisRun({

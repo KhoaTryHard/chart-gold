@@ -156,7 +156,7 @@ test('does not label retrieval-only time as source publication', async ({
   await expect(status).not.toContainText('Nguồn công bố');
 });
 
-test('explains the price page before the picker and updates prices and chart units together', async ({
+test('opens the domestic line chart before price cards and updates their units together', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -172,9 +172,15 @@ test('explains the price page before the picker and updates prices and chart uni
   });
   const picker = dashboard.locator('.market-selection:visible');
   await expect(title).toBeVisible();
-  await expect(dashboard.locator('.market-intro p').first()).toContainText(
-    'Xem số tiền bạn cần trả khi mua và khoản có thể nhận khi bán.',
+  const firstChart = dashboard.getByTestId('domestic-chart');
+  await expect(firstChart).toHaveAttribute('data-chart-mode', 'line');
+  const chartTop = await firstChart.evaluate(
+    (element) => element.getBoundingClientRect().top,
   );
+  const quoteTop = await dashboard
+    .locator('.metric-card--quote')
+    .evaluate((element) => element.getBoundingClientRect().top);
+  expect(chartTop).toBeLessThan(quoteTop);
   const titleTop = await title.evaluate(
     (element) => element.getBoundingClientRect().top,
   );

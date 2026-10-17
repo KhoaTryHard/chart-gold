@@ -13,7 +13,6 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Check,
-  ChevronDown,
   CircleAlert,
   History,
   LoaderCircle,
@@ -22,9 +21,11 @@ import {
   Trash2,
   ThumbsDown,
   ThumbsUp,
+  X,
 } from 'lucide-react';
 import {
   getDefaultMarketProduct,
+  getMarketCompany,
   getMarketProducts,
   isMarketCompanyId,
   isMarketProductId,
@@ -32,7 +33,7 @@ import {
   type MarketCompanyId,
 } from '@/lib/market-sources';
 import { ANALYSIS_RANGES, type AnalysisRange } from '@/lib/analysis/metrics';
-import type { AnalysisDecision, AnalysisFacts } from '@/lib/analysis/response';
+import type { AnalysisFacts } from '@/lib/analysis/response';
 import type { AnalysisGoal, AnalysisDepth } from '@/lib/analysis/experience';
 import type { ForecastResult } from '@/lib/analysis/forecast';
 import {
@@ -42,16 +43,14 @@ import {
   type PortfolioLedger,
 } from '@/lib/portfolio-ledger';
 import { AnswerMarkdown } from './answer-markdown';
+import { selectQuestionFacts } from '@/lib/analysis/response';
 import type { AnalysisAccess } from '@/lib/analysis/access';
 import type { Locale } from '@/lib/i18n';
 import {
   analysisRequestSchema,
   type AnalysisRequestPayload,
 } from '@/lib/analysis/request';
-import {
-  analysisDecisionSchema,
-  analysisFactsSchema,
-} from '@/lib/analysis/response';
+import { analysisFactsSchema } from '@/lib/analysis/response';
 import { SearchSuggestions } from './search-suggestions';
 import { useLocale } from '@/components/locale-provider';
 import { useAccountMenuState } from '@/components/account-menu-context';
@@ -110,26 +109,26 @@ const subscribeToHydration = () => () => {};
 const getHydratedSnapshot = () => true;
 const getServerHydratedSnapshot = () => false;
 
-function defaultAnalysisQuestion(locale: Locale, goal: AnalysisGoal = 'hold') {
+function defaultAnalysisQuestion(locale: Locale, goal?: AnalysisGoal) {
   const questions: Record<AnalysisGoal, Record<Locale, string>> = {
     buy: {
-      vi: 'Nếu mua vàng hôm nay, cần giá tăng bao nhiêu để hòa vốn?',
-      en: 'If I buy gold today, how much must the price rise for me to break even?',
+      vi: 'Mua 1 chỉ nhẫn SJC thì chênh lệch mua bán bao nhiêu?',
+      en: 'What is the buy–sell spread if I buy one chỉ of SJC gold rings?',
     },
     hold: {
-      vi: 'Vàng tôi đang giữ lãi bao nhiêu, đã hòa vốn chưa?',
-      en: 'How much profit or loss would I have if I sold my gold today?',
+      vi: 'Xem lãi/lỗ từ Sổ vàng của tôi.',
+      en: 'Show the profit or loss from my Gold Ledger.',
     },
     compare: {
-      vi: 'So sánh giá bán ra các loại vàng nhẫn 9999 hôm nay',
-      en: 'Compare today’s dealer sell prices for 9999 gold rings',
+      vi: 'So sánh giá bán ra nhẫn 9999 của SJC và DOJI hôm nay.',
+      en: 'Compare today’s dealer sell prices for SJC and DOJI 9999 gold rings.',
     },
     market: {
-      vi: 'Giá vàng hôm nay biến động thế nào?',
+      vi: 'Giá vàng hôm nay thay đổi thế nào?',
       en: 'How has gold moved today?',
     },
   };
-  return questions[goal][locale];
+  return goal ? questions[goal][locale] : '';
 }
 
 function ForecastCard({
@@ -237,56 +236,11 @@ function analysisRangeLabel(range: AnalysisRange, locale: 'vi' | 'en') {
     : { '7N': '7 ngày', '1T': '1 tháng', '1N': '1 năm' }[range];
 }
 
-function analysisGoals(locale: 'vi' | 'en'): Array<{
-  value: AnalysisGoal;
-  label: string;
-  description: string;
-}> {
-  return locale === 'en'
-    ? [
-        {
-          value: 'market',
-          label: 'Understand the market',
-          description: 'News, drivers, and context',
-        },
-        {
-          value: 'buy',
-          label: 'I plan to buy',
-          description: 'Cost, break-even, buy or wait',
-        },
-        {
-          value: 'hold',
-          label: 'I hold gold',
-          description: 'Profit or loss if sold today',
-        },
-        {
-          value: 'compare',
-          label: 'Compare gold',
-          description: 'Prices you pay and prices you receive',
-        },
-      ]
-    : [
-        {
-          value: 'market',
-          label: 'Hiểu thị trường',
-          description: 'Tin, nguyên nhân, bối cảnh',
-        },
-        {
-          value: 'buy',
-          label: 'Tôi định mua',
-          description: 'Chi phí, hòa vốn, mua hay chờ',
-        },
-        {
-          value: 'hold',
-          label: 'Tôi đang giữ vàng',
-          description: 'Lãi/lỗ nếu bán hôm nay',
-        },
-        {
-          value: 'compare',
-          label: 'So sánh loại vàng',
-          description: 'Giá bạn phải trả và khoản có thể nhận',
-        },
-      ];
+function analysisSuggestions(locale: Locale) {
+  return (['market', 'buy', 'compare', 'hold'] as const).map((value) => ({
+    value,
+    label: defaultAnalysisQuestion(locale, value),
+  }));
 }
 
 function readSseChunk(buffer: string) {
@@ -361,7 +315,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   const english = locale === 'en';
   const { status, data: session, update } = useSession();
   const { setState: setAccountMenuState } = useAccountMenuState();
-  const [goal, setGoal] = useState<AnalysisGoal>('hold');
+  const [goal, setGoal] = useState<AnalysisGoal>();
+  const [useLedger, setUseLedger] = useState(false);
+  const [answerQuestion, setAnswerQuestion] = useState('');
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     getHydratedSnapshot,
@@ -377,6 +333,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     defaultAnalysisQuestion(locale, goal),
   );
   const questionEditedRef = useRef(false);
+  const previousLocaleRef = useRef(locale);
   const [savedLedger, setSavedLedger] = useState<PortfolioLedger | undefined>();
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState('');
@@ -416,11 +373,10 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   const [answer, setAnswer] = useState('');
   const [answerLocale, setAnswerLocale] = useState<'vi' | 'en'>(locale);
   const [facts, setFacts] = useState<AnalysisFacts | null>(null);
-  const [decision, setDecision] = useState<AnalysisDecision | null>(null);
-  const [decisionNotesOpen, setDecisionNotesOpen] = useState(false);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [coverage, setCoverage] = useState('');
   const [warning, setWarning] = useState('');
+  const [dataWarning, setDataWarning] = useState('');
   const [sources, setSources] = useState<Source[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -479,11 +435,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           ? (analysisFactsSchema.safeParse(last.facts).data ?? null)
           : null,
       );
-      setDecision(
-        last.decision
-          ? (analysisDecisionSchema.safeParse(last.decision).data ?? null)
-          : null,
-      );
+      setAnswerQuestion(last.question);
+      setUseLedger(typeof last.ledgerVersion === 'number');
       setForecast(last.forecast);
       setSources(last.sources ?? []);
       setCitations(last.citations ?? []);
@@ -492,17 +445,17 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       setCompanyId(isMarketCompanyId(last.companyId) ? last.companyId : 'sjc');
       setProductId(last.productId);
       if (last.range in ANALYSIS_RANGES) setRange(last.range as AnalysisRange);
-      if (last.goal) setGoal(last.goal);
+      setGoal(last.goal ?? undefined);
       if (last.analysisDepth === 'deep' || last.analysisDepth === 'standard')
         setDepth(last.analysisDepth);
     } else {
       setAnswer('');
       setFacts(null);
-      setDecision(null);
       setForecast(null);
       setSources([]);
       setCitations([]);
       setCoverage('');
+      setDataWarning('');
       setWarning('');
     }
     questionEditedRef.current = true;
@@ -642,8 +595,9 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   }, []);
 
   useEffect(() => {
-    if (!questionEditedRef.current)
+    if (previousLocaleRef.current !== locale && !questionEditedRef.current)
       setQuestion(defaultAnalysisQuestion(locale, goal));
+    previousLocaleRef.current = locale;
   }, [goal, locale]);
 
   useEffect(() => {
@@ -693,10 +647,27 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       if (nextCompany !== 'sjc') setCompanyId(nextCompany);
       if (nextProduct) setProductId(nextProduct);
       setRange(nextRange);
+      if (requestedCompany || requestedProduct)
+        setQuestionContext({
+          companyLabel: getMarketCompany(nextCompany).shortName,
+          productLabel:
+            getMarketProducts(nextCompany).find(
+              (item) => item.id === nextProduct,
+            )?.shortLabel ?? '',
+          range: nextRange,
+          rangeSource: 'link',
+        });
       if (presetGoal) {
         setGoal(presetGoal);
+        setUseLedger(presetGoal === 'hold');
         questionEditedRef.current = true;
-        setQuestion(defaultAnalysisQuestion(locale, presetGoal));
+        setQuestion(
+          presetGoal === 'buy' && matchingProduct
+            ? english
+              ? `If I buy ${matchingProduct.weightInLuong ?? 1} lượng of ${getMarketCompany(nextCompany).shortName} ${matchingProduct.shortLabel}, what is the buy–sell spread?`
+              : `Mua ${matchingProduct.weightInLuong ?? 1} lượng ${getMarketCompany(nextCompany).shortName} ${matchingProduct.shortLabel}, chênh lệch mua bán bao nhiêu?`
+            : defaultAnalysisQuestion(locale, presetGoal),
+        );
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -767,58 +738,69 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
   useEffect(() => () => operation.current?.abort(), []);
 
   useEffect(() => {
-    const account = session?.user?.email;
-    if (!account) return;
-    if (goal !== 'hold') {
-      queueMicrotask(() => setLedgerLoading(false));
-      return;
-    }
+    if (!useLedger || !session?.user?.email) return;
+    const controller = new AbortController();
     queueMicrotask(() => {
+      if (controller.signal.aborted) return;
       setLedgerLoading(true);
       setLedgerError('');
       void fetch('/api/portfolio/ledger', {
         credentials: 'same-origin',
         cache: 'no-store',
+        signal: controller.signal,
       })
         .then(async (response) => {
-          const body = (await response.json().catch(() => ({}))) as {
-            ledger?: PortfolioLedger;
-            version?: number;
-            error?: string;
-          };
+          const body = await response.json();
           if (!response.ok || !body.ledger || typeof body.version !== 'number')
-            throw new Error(body.error ?? 'Không thể tải Sổ vàng.');
+            throw new Error(
+              body.error ??
+                (english
+                  ? 'Unable to load Gold Ledger.'
+                  : 'Không thể tải Sổ vàng.'),
+            );
+          if (controller.signal.aborted) return;
           setLedgerVersion(body.version);
-          return body.ledger;
+          setSavedLedger(body.ledger);
         })
-        .then((serverLedger) => {
-          setSavedLedger(serverLedger);
-          setLedgerLoading(false);
-        })
-        .catch((error) => {
+        .catch((cause: unknown) => {
+          if (controller.signal.aborted) return;
           setLedgerError(
-            error instanceof Error ? error.message : 'Không thể tải Sổ vàng.',
+            cause instanceof Error ? cause.message : 'Không thể tải Sổ vàng.',
           );
           setSavedLedger(undefined);
-          setLedgerLoading(false);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLedgerLoading(false);
         });
-      if (!window.location.search.includes('ai=resume')) return;
+    });
+    return () => controller.abort();
+  }, [useLedger, english, session?.user?.email]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    if (!window.location.search.includes('ai=resume')) return;
+    queueMicrotask(() => {
       try {
         const draft = JSON.parse(
           sessionStorage.getItem('kim-tuyen:ai-draft') ?? 'null',
         ) as Partial<{
           goal: AnalysisGoal;
+          useLedger: boolean;
           depth: AnalysisDepth;
           companyId: MarketCompanyId;
           productId: string;
           range: AnalysisRange;
           question: string;
         }> | null;
-        if (draft?.question) {
-          if (draft.goal) setGoal(draft.goal);
-          if (draft.depth) setDepth(draft.depth);
-          if (draft.companyId) setCompanyId(draft.companyId);
-          if (draft.productId) setProductId(draft.productId);
+        if (draft && typeof draft.question === 'string') {
+          setGoal(draft.goal);
+          setUseLedger(draft.useLedger ?? draft.goal === 'hold');
+          if (draft.depth === 'deep' || draft.depth === 'standard')
+            setDepth(draft.depth);
+          if (draft.companyId && isMarketCompanyId(draft.companyId))
+            setCompanyId(draft.companyId);
+          if (typeof draft.productId === 'string')
+            setProductId(draft.productId);
           if (draft.range && draft.range in ANALYSIS_RANGES)
             setRange(draft.range);
           questionEditedRef.current = true;
@@ -826,13 +808,13 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         }
         sessionStorage.removeItem('kim-tuyen:ai-draft');
       } catch {
-        // Ignore malformed or blocked draft storage.
+        /* Storage is optional. */
       }
     });
-  }, [goal, locale, session?.user?.email]);
+  }, [status]);
 
   const buildPayload = () => {
-    const usingAccountLedger = goal === 'hold';
+    const usingAccountLedger = useLedger;
     if (usingAccountLedger && (!savedLedger || !ledgerVersion))
       throw new Error(
         ledgerError ||
@@ -929,6 +911,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
         'kim-tuyen:ai-draft',
         JSON.stringify({
           goal,
+          useLedger,
           depth,
           companyId,
           productId: product?.id,
@@ -977,7 +960,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     setFeedback(null);
     setRequestId(null);
     try {
-      if (goal === 'hold') {
+      if (useLedger) {
         if (ledgerLoading) {
           setError(
             english
@@ -1079,15 +1062,15 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     const currentQuestion = input.question;
     const requestLocale = input.locale ?? 'vi';
     setAnswerLocale(requestLocale);
+    setAnswerQuestion(currentQuestion);
     setAnswer('');
     setRetryAvailable(false);
     setFacts(null);
-    setDecision(null);
-    setDecisionNotesOpen(false);
     setForecast(null);
     setSources([]);
     setCitations([]);
     setCoverage('');
+    setDataWarning('');
     setMessages((current) => [
       ...current,
       { role: 'user', content: currentQuestion, locale: requestLocale },
@@ -1128,6 +1111,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
       let buffer = '';
       let finalAnswer = '';
       let finished = false;
+      let completedConversationId: string | null = input.conversationId ?? null;
       while (true) {
         const next = await reader.read();
         if (next.done) break;
@@ -1156,6 +1140,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
               setProgress(payload.message);
           } else if (payload.type === 'conversation') {
             if (typeof payload.conversationId === 'string') {
+              completedConversationId = payload.conversationId;
               setConversationId(payload.conversationId);
               window.history.replaceState(
                 {},
@@ -1175,14 +1160,18 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             setForecast(payload.forecast as ForecastResult);
           } else if (payload.type === 'facts' && payload.payload) {
             setFacts(analysisFactsSchema.parse(payload.payload));
-          } else if (payload.type === 'decision' && payload.payload) {
-            setDecision(analysisDecisionSchema.parse(payload.payload));
           } else if (payload.type === 'metadata' && payload.context) {
             const context = payload.context as {
               eligible?: number;
               requested?: number;
               today?: string;
             };
+            if ((context.eligible ?? 0) < (context.requested ?? 0))
+              setDataWarning(
+                requestLocale === 'en'
+                  ? `Only ${context.eligible ?? 0}/${context.requested} groups have usable data; some comparisons or valuations may be incomplete.`
+                  : `Chỉ ${context.eligible ?? 0}/${context.requested} nhóm có dữ liệu dùng được; phần so sánh hoặc định giá có thể chưa đầy đủ.`,
+              );
             setCoverage(
               requestLocale === 'en'
                 ? `${context.eligible ?? 0}/${context.requested ?? 0} groups with sufficient data · ${context.today ?? ''}`
@@ -1201,6 +1190,12 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 requestLocale === 'en'
                   ? 'Only reference data is available; the AI response did not complete. This request is not counted against your quota.'
                   : 'Chỉ có số liệu tham khảo; AI chưa hoàn tất. Lượt này không tính vào hạn mức.',
+              );
+            else if (payload.completion === 'truncated')
+              setWarning(
+                requestLocale === 'en'
+                  ? 'The answer was cut short. Treat it as incomplete and ask a narrower follow-up.'
+                  : 'Câu trả lời bị cắt trước khi hoàn tất. Bạn có thể hỏi tiếp một ý cụ thể hơn.',
               );
           } else if (
             payload.type === 'status' &&
@@ -1271,6 +1266,10 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
             ? 'The connection ended before the AI finished. Try again; the text above is not a complete result.'
             : 'Kết nối kết thúc trước khi AI hoàn tất. Hãy thử lại; nội dung trên chưa phải kết quả đầy đủ.',
         );
+      if (finalAnswer) {
+        questionEditedRef.current = true;
+        setQuestion('');
+      }
       const nextMessages = finalAnswer
         ? [
             ...messages,
@@ -1287,6 +1286,21 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           ]
         : messages;
       setMessages(nextMessages);
+      if (completedConversationId) {
+        void fetch(
+          `/api/analysis/conversations/${encodeURIComponent(completedConversationId)}`,
+          { credentials: 'same-origin', cache: 'no-store' },
+        )
+          .then(async (result) => {
+            if (!result.ok) return;
+            const body = (await result.json()) as {
+              conversation?: ConversationDetail;
+            };
+            if (body.conversation)
+              setConversationTurns(body.conversation.turns);
+          })
+          .catch(() => undefined);
+      }
       void loadConversationList().catch(() => undefined);
     } finally {
       setAccessRevision((value) => value + 1);
@@ -1313,15 +1327,21 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
     setMessages([]);
     setAnswer('');
     setFacts(null);
-    setDecision(null);
     setForecast(null);
     setSources([]);
     setCitations([]);
     setCoverage('');
+    setDataWarning('');
     setWarning('');
     setError('');
     questionEditedRef.current = false;
-    setQuestion(defaultAnalysisQuestion(locale, goal));
+    setGoal(undefined);
+    setUseLedger(false);
+    setQuestion('');
+    setAnswerQuestion('');
+    setDepth('standard');
+    setQuestionContext(null);
+    setMissingQuestionNeeds([]);
     window.history.pushState({}, '', '/phan-tich');
     setHistoryOpen(false);
   };
@@ -1378,6 +1398,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
 
   const chooseGoal = (value: AnalysisGoal) => {
     setGoal(value);
+    setUseLedger(value === 'hold');
+    setQuestionContext(null);
     setError('');
     setMissingQuestionNeeds([]);
     questionEditedRef.current = false;
@@ -1568,72 +1590,34 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
           </div>
         </SheetContent>
       </Sheet>
-      <div
-        className="ai-goals mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
-        role="tablist"
-        aria-label={english ? 'Analysis goal' : 'Nhu cầu phân tích'}
-      >
-        {analysisGoals(locale).map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            disabled={busy}
-            role="tab"
-            aria-selected={goal === item.value}
-            onClick={() => chooseGoal(item.value)}
-            className={`rounded-2xl border p-4 text-left transition-colors ${goal === item.value ? 'border-primary bg-accent text-accent-foreground' : 'border-border bg-card hover:bg-accent/60'}`}
-          >
-            <span className="block text-sm font-semibold">{item.label}</span>
-            <span className="mt-1 block text-xs leading-5 opacity-75">
-              {item.description}
-            </span>
-          </button>
-        ))}
-      </div>
       <div className="ai-content-grid mx-auto w-full max-w-[1040px]">
         <section className="min-w-0">
           <div className="ai-question-panel glass-panel p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {english ? 'Analysis depth' : 'Độ sâu phân tích'}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {english ? 'Data' : 'Dữ liệu'}:{' '}
-                  {analysisRangeLabel(range, locale)}
-                </p>
-                <div className="mt-1 flex gap-1 rounded-xl bg-muted p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDepth('standard');
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-xs ${depth === 'standard' ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground'}`}
-                  >
-                    {english ? 'Standard' : 'Thông thường'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDepth('deep');
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-xs ${depth === 'deep' ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground'}`}
-                  >
-                    {english ? 'Deep' : 'Chuyên sâu'}
-                  </button>
-                </div>
-              </div>
-              <div />
-            </div>
-            {goal === 'hold' ? (
+            {useLedger ? (
               <div
                 className="mb-4 rounded-xl border border-accent bg-accent/30 px-3 py-2 text-xs"
                 aria-live="polite"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold">
-                    {english ? 'Your Gold Ledger' : 'Sổ vàng của bạn'}
+                    {english ? 'Using your Gold Ledger' : 'Đang dùng Sổ vàng'}
                   </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      questionEditedRef.current = true;
+                      setUseLedger(false);
+                      setGoal(undefined);
+                      setLedgerError('');
+                    }}
+                    aria-label={
+                      english ? 'Stop using Gold Ledger' : 'Bỏ dùng Sổ vàng'
+                    }
+                    className="ml-auto inline-flex min-h-9 items-center gap-1 rounded-lg px-2 hover:bg-accent"
+                  >
+                    <X className="size-3.5" /> {english ? 'Remove' : 'Bỏ'}
+                  </button>
                   <Link
                     href="/so-vang"
                     className="font-medium text-primary underline underline-offset-2"
@@ -1687,7 +1671,7 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 }}
                 maxLength={1500}
                 rows={4}
-                disabled={busy}
+                disabled={busy || status === 'loading'}
                 className="min-h-24 w-full resize-y rounded-2xl border border-input bg-background p-4 text-base leading-6 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder={
                   conversationId
@@ -1700,14 +1684,48 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                 }
               />
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {goal === 'buy'
+                {useLedger
                   ? english
-                    ? 'Example: I want to buy one SJC gold chi and hold it for 6 months.'
-                    : 'Ví dụ: Tôi muốn mua 1 chỉ nhẫn SJC, dự định giữ 6 tháng.'
+                    ? 'Ask about the holdings in your selected ledger.'
+                    : 'Hỏi về các khoản vàng trong sổ bạn đã chọn.'
                   : english
-                    ? 'Describe the product, amount, budget, and timeframe you want to analyze.'
-                    : 'Hãy nêu loại vàng, số lượng, ngân sách và khoảng thời gian bạn muốn phân tích.'}
+                    ? 'Ask in your own words. Add quantity and cost if you want a personal calculation.'
+                    : 'Hỏi theo cách của bạn; thêm số lượng, giá vốn nếu muốn tính lãi/lỗ.'}
               </p>
+              {!conversationId && !answer && (
+                <div
+                  className="mt-3 flex flex-wrap gap-2"
+                  aria-label={english ? 'Suggested questions' : 'Gợi ý câu hỏi'}
+                >
+                  {analysisSuggestions(locale).map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => chooseGoal(item.value)}
+                      className="min-h-10 max-w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-left text-xs leading-5 hover:bg-accent disabled:opacity-50"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <details className="mt-3 text-xs text-muted-foreground">
+                <summary className="w-fit cursor-pointer py-2">
+                  {english ? 'Options' : 'Tùy chọn'}
+                </summary>
+                <label className="flex min-h-10 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={depth === 'deep'}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDepth(event.target.checked ? 'deep' : 'standard')
+                    }
+                  />
+                  {english ? 'Deep analysis' : 'Phân tích chuyên sâu'}
+                </label>
+              </details>
               {questionContext ? (
                 <p
                   className="mt-2 text-xs leading-5 text-muted-foreground"
@@ -1821,27 +1839,6 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
               </button>
             </output>
           )}
-          {suggestions && <SearchSuggestions html={suggestions} />}
-          {forecast ? (
-            <ForecastCard forecast={forecast} locale={locale} />
-          ) : null}
-          {facts?.facts.length ? (
-            <div lang={answerLocale} className="mt-5 grid gap-3 sm:grid-cols-3">
-              {facts.facts.slice(0, 3).map((item) => (
-                <div key={item.key} className="metric-card p-4">
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
-                  <p className="mt-2 text-xl font-semibold tabular-nums">
-                    {formatValue(item.value, item.unit, locale)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {item.assumption ??
-                      item.unit ??
-                      (english ? 'Calculated from data' : 'Đã tính từ dữ liệu')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
           {displayedPreviousTurns.length > 0 && (
             <section
               className="mt-5 space-y-4"
@@ -1874,48 +1871,85 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
               ))}
             </section>
           )}
-          {answer && (
-            <div className="mt-5 rounded-2xl border border-border bg-card p-5">
+          {(answer || facts || forecast) && (
+            <article
+              className="ai-answer mt-5 rounded-2xl border border-border bg-card p-5 sm:p-6"
+              aria-label={english ? 'AI answer' : 'Câu trả lời AI'}
+            >
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <MessageCircle className="size-4 text-primary" />{' '}
-                {english ? 'Explanation' : 'Giải thích'}
+                {english ? 'Answer' : 'Trả lời'}
               </div>
+              {answerQuestion && (
+                <p className="mb-4 border-b border-border/60 pb-3 text-sm text-muted-foreground">
+                  {answerQuestion}
+                </p>
+              )}
+              {forecast && (
+                <ForecastCard forecast={forecast} locale={answerLocale} />
+              )}
               <div lang={answerLocale}>
                 <AnswerMarkdown content={answer} citations={citations} />
               </div>
-              {coverage && (
-                <p
+              {selectQuestionFacts(facts, answerQuestion, Boolean(forecast))
+                .length > 0 && (
+                <div
+                  className="mt-5 grid gap-3 sm:grid-cols-3"
                   lang={answerLocale}
-                  className="mt-4 text-xs text-muted-foreground"
                 >
-                  {coverage}
-                </p>
+                  {selectQuestionFacts(
+                    facts,
+                    answerQuestion,
+                    Boolean(forecast),
+                  ).map((item) => (
+                    <div key={item.key} className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">
+                        {formatValue(item.value, item.unit, answerLocale)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.unit}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               )}
-              {warning && (
+              {[
+                ...new Set(
+                  [
+                    warning,
+                    dataWarning,
+                    ...(facts?.facts.map((item) => item.assumption) ?? []),
+                  ].filter((item): item is string => Boolean(item)),
+                ),
+              ].map((message) => (
                 <p
+                  key={message}
                   lang={answerLocale}
-                  className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                  className="mt-3 text-xs leading-5 text-amber-700 dark:text-amber-300"
                 >
-                  {warning}
+                  {message}
                 </p>
-              )}
-              <details className="mt-4 text-xs text-muted-foreground">
-                <summary className="cursor-pointer">
-                  {english ? 'Data and limits' : 'Số liệu và giới hạn'}
-                </summary>
-                <p className="mt-2">
-                  {english
-                    ? 'The figures in the cards come from server data and this analysis. Fallback, stale, or incompletely dated data is not treated as a current price.'
-                    : 'Các con số trong thẻ lấy từ dữ liệu server và phép tính của lượt này. Giá dự phòng, dữ liệu cũ hoặc thiếu ngày đối chiếu không được xem là giá mới.'}
-                </p>
-              </details>
-              {sources.length > 0 && (
-                <details className="mt-3 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">
-                    {english ? 'Sources' : 'Nguồn tham khảo'} ({sources.length})
+              ))}
+              {(coverage || sources.length > 0) && (
+                <details className="mt-4 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer py-1">
+                    {english ? 'Sources and data' : 'Nguồn và dữ liệu'}
                   </summary>
-                  <ul className="mt-2 space-y-1">
-                    {sources.slice(0, 12).map((source) => (
+                  {coverage && (
+                    <p className="mt-2" lang={answerLocale}>
+                      {coverage}
+                    </p>
+                  )}
+                  <p className="mt-2 leading-5">
+                    {english
+                      ? 'Estimates use the quoted prices and declared inputs for this question. Confirm the quote and buyback conditions with the dealer.'
+                      : 'Ước tính theo giá niêm yết và thông tin đã khai cho câu hỏi này. Đối chiếu lại giá và điều kiện thu mua tại cửa hàng.'}
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {sources.map((source) => (
                       <li key={source.url}>
                         <a
                           href={source.url}
@@ -1930,61 +1964,8 @@ function AccountAnalysisWorkspace({ locale }: { locale: 'vi' | 'en' }) {
                   </ul>
                 </details>
               )}
-            </div>
-          )}
-          {answer && decision && (
-            <details
-              open={decisionNotesOpen}
-              onToggle={(event) =>
-                setDecisionNotesOpen(event.currentTarget.open)
-              }
-              className="group mt-4 rounded-2xl border border-border bg-card/60 px-4 text-sm text-muted-foreground"
-              lang={answerLocale}
-            >
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
-                <span>{english ? 'Data notes' : 'Lưu ý theo dữ liệu'}</span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className={`size-4 shrink-0 transition-transform ${decisionNotesOpen ? 'rotate-180' : ''}`}
-                />
-              </summary>
-              <div className="space-y-2 border-t border-border/70 pb-4 pt-3 leading-6">
-                <p className="font-medium text-foreground">
-                  {decision.headline}
-                </p>
-                <p>{decision.summary}</p>
-                {decision.conditions.length > 0 && (
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {english ? 'Conditions' : 'Điều kiện'}
-                    </p>
-                    <ul className="list-disc space-y-1 pl-5">
-                      {decision.conditions.map((condition) => (
-                        <li key={condition}>{condition}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </details>
-          )}
-          {decision && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {decision.nextSteps.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    questionEditedRef.current = true;
-                    setQuestion(item);
-                  }}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs hover:bg-accent"
-                >
-                  {item}
-                  <ArrowRight className="size-3.5" />
-                </button>
-              ))}
-            </div>
+              {suggestions && <SearchSuggestions html={suggestions} />}
+            </article>
           )}
           {answer && (
             <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">

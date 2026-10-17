@@ -10,7 +10,7 @@ vi.mock('@google/genai', () => ({
   GoogleGenAI: class {
     models = { generateContentStream: mocks.generateContentStream };
   },
-  ThinkingLevel: { HIGH: 'HIGH' },
+  ThinkingLevel: { HIGH: 'HIGH', LOW: 'LOW' },
 }));
 
 import {
@@ -70,6 +70,9 @@ describe('Gemini analysis provider', () => {
       { type: 'done', model: 'gemini-3.6-flash', usage: null },
     ]);
     expect(mocks.generateContentStream).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.generateContentStream.mock.calls[0][0].config.thinkingConfig,
+    ).toEqual({ thinkingLevel: 'LOW' });
     expect(mocks.generateContentStream.mock.calls[0][0].config.tools).toEqual([
       { googleSearch: {} },
     ]);

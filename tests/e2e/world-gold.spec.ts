@@ -120,6 +120,10 @@ test('keeps the world chart before Nhịp vàng and supports the direct anchor',
   await expect(page).toHaveURL(/\/#vang-the-gioi$/);
   const world = page.locator('#vang-the-gioi').first();
   await expect(world).toBeVisible();
+  await expect(page.getByTestId('domestic-chart')).toBeVisible();
+  await expect(
+    world.getByRole('heading', { name: 'Vàng thế giới', exact: true }),
+  ).toBeInViewport();
   const order = await page.evaluate(() => {
     const world = document.querySelector('#vang-the-gioi');
     const editorial = document.querySelector('#nhip-vang');

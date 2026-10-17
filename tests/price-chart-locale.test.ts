@@ -73,6 +73,11 @@ it('switches VI/EN and lượng/chỉ without recreating the chart or losing the
   };
   try {
     await act(async () => root.render(createElement(PriceChart, props)));
+    expect(
+      element
+        .querySelector('[data-testid="domestic-chart"]')
+        ?.getAttribute('data-chart-mode'),
+    ).toBe('line');
     expect(element.textContent).toContain('Thị trường trong nước');
     expect(
       element.querySelector('[data-testid="chart-readout"]')?.textContent,
@@ -91,7 +96,7 @@ it('switches VI/EN and lượng/chỉ without recreating the chart or losing the
     expect(element.textContent).toContain('million VND / chỉ');
     expect(
       element.querySelector('[data-testid="chart-readout"]')?.textContent,
-    ).toContain('Close 14.40');
+    ).toContain('Dealer sell 14.40');
     expect(
       [...element.querySelectorAll('button')]
         .find((button) => button.textContent === '7 days')

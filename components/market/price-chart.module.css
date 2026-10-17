@@ -1,23 +1,24 @@
 .section {
   min-width: 0;
-  margin-top: 32px;
+  margin-top: 0;
+  margin-bottom: 24px;
 }
 .header {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 .source {
   display: flex;
   flex-wrap: wrap;
-  justify-content: end;
+  justify-content: start;
   align-items: center;
   gap: 8px 14px;
   font-size: 11px;
   color: var(--muted-foreground);
-  text-align: right;
+  margin-top: 8px;
 }
 .source a {
   display: inline-flex;
@@ -30,7 +31,7 @@
   text-underline-offset: 3px;
 }
 .reference {
-  margin: -4px 0 12px;
+  margin: 4px 0 0;
   color: var(--muted-foreground);
   font-size: 12px;
 }
@@ -84,9 +85,6 @@
 .group button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-.zoom {
-  margin-left: auto;
 }
 .readout {
   display: flex;
@@ -158,6 +156,7 @@
 }
 .footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 14px;
@@ -300,7 +299,7 @@
 }
 @media (max-width: 639px) {
   .section {
-    margin-top: 24px;
+    margin-top: 0;
   }
   .header {
     flex-direction: column;
@@ -322,13 +321,10 @@
   .group button {
     padding-inline: 8px;
   }
-  .zoom {
-    margin-left: 0;
-  }
   .readout {
     gap: 7px 14px;
-    padding: 12px;
-    min-height: 88px;
+    padding: 10px 12px;
+    min-height: 64px;
   }
   .date {
     width: 100%;

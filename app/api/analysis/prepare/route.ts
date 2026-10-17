@@ -3,10 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { analysisRequestSchema } from '@/lib/analysis/request';
 import { inspectLedgerIntegrity } from '@/lib/portfolio-ledger';
 import { prepareAnalysisInput } from '@/lib/analysis/input';
-import {
-  AnalysisAccessError,
-  readAnalysisAccess,
-} from '@/lib/analysis/access';
+import { usesAccountLedger } from '@/lib/analysis/focus';
+import { AnalysisAccessError, readAnalysisAccess } from '@/lib/analysis/access';
 import { analysisExperienceV2Enabled } from '@/lib/analysis/experience';
 import { abortable } from '@/lib/server/market-fetch';
 import { readJsonBody, RequestBodyTooLargeError } from '@/lib/server/body';
@@ -14,7 +12,10 @@ import { isTrustedOrigin } from '@/lib/server/origin';
 import { readPortfolioLedgerForSession } from '@/lib/server/portfolio-ledger';
 import { localeFromCookieHeader, type Locale } from '@/lib/i18n';
 import { ensureSessionUser } from '@/lib/billing/server';
-import { inferQuestionContext, type QuestionContext } from '@/lib/analysis/question-context';
+import {
+  inferQuestionContext,
+  type QuestionContext,
+} from '@/lib/analysis/question-context';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -57,7 +58,10 @@ function logAccessFailure(
 }
 
 export async function GET(request?: Request) {
-  const locale = request && new URL(request.url).searchParams.get('locale') === 'en' ? 'en' : 'vi';
+  const locale =
+    request && new URL(request.url).searchParams.get('locale') === 'en'
+      ? 'en'
+      : 'vi';
   const requestId = randomUUID();
   try {
     let session;
@@ -97,9 +101,10 @@ export async function GET(request?: Request) {
     return respond(
       {
         code: 'SESSION_UNAVAILABLE',
-        error: locale === 'en'
-          ? 'Unable to check your sign-in session. Please try again; no AI request has been used.'
-          : 'Không kiểm tra được phiên đăng nhập. Hãy thử lại; chưa có lượt AI nào được sử dụng.',
+        error:
+          locale === 'en'
+            ? 'Unable to check your sign-in session. Please try again; no AI request has been used.'
+            : 'Không kiểm tra được phiên đăng nhập. Hãy thử lại; chưa có lượt AI nào được sử dụng.',
         requestId,
       },
       503,
@@ -113,7 +118,10 @@ export async function POST(request: Request) {
   try {
     if (!isTrustedOrigin(request))
       return respond(
-        { code: 'INVALID_ORIGIN', error: locale === 'en' ? 'Invalid request.' : 'Yêu cầu không hợp lệ.' },
+        {
+          code: 'INVALID_ORIGIN',
+          error: locale === 'en' ? 'Invalid request.' : 'Yêu cầu không hợp lệ.',
+        },
         403,
       );
     const signal = AbortSignal.any([
@@ -128,9 +136,10 @@ export async function POST(request: Request) {
       return respond(
         {
           code: 'INVALID_INPUT',
-          error: locale === 'en'
-            ? 'Check the quantity, currency units, and selected product.'
-            : 'Kiểm tra số lượng, đơn vị tiền và sản phẩm đã chọn.',
+          error:
+            locale === 'en'
+              ? 'Check the quantity, currency units, and selected product.'
+              : 'Kiểm tra số lượng, đơn vị tiền và sản phẩm đã chọn.',
           fields: parsed.error.issues.map((item) => ({
             path: item.path.join('.'),
             message: item.message,
@@ -155,16 +164,26 @@ export async function POST(request: Request) {
       };
     }
     let prepared = prepareAnalysisInput(requestData);
-    if (requestData.goal !== 'hold' && requestData.usePortfolioLedger !== false && requestData.portfolioLedger) {
-      const ledgerIntegrity = inspectLedgerIntegrity(requestData.portfolioLedger.transactions);
+    const usingAccountLedger = usesAccountLedger(requestData);
+    if (
+      requestData.usePortfolioLedger !== false &&
+      requestData.portfolioLedger
+    ) {
+      const ledgerIntegrity = inspectLedgerIntegrity(
+        requestData.portfolioLedger.transactions,
+      );
       if (!ledgerIntegrity.valid)
-        return respond({
-          code: 'INVALID_LEDGER',
-          error: requestData.locale === 'en'
-            ? 'Fix the ledger issues before asking AI to analyze it.'
-            : 'Hãy sửa các lỗi trong sổ trước khi yêu cầu AI phân tích.',
-          issues: ledgerIntegrity.issues,
-        }, 400);
+        return respond(
+          {
+            code: 'INVALID_LEDGER',
+            error:
+              requestData.locale === 'en'
+                ? 'Fix the ledger issues before asking AI to analyze it.'
+                : 'Hãy sửa các lỗi trong sổ trước khi yêu cầu AI phân tích.',
+            issues: ledgerIntegrity.issues,
+          },
+          400,
+        );
     }
     let session;
     try {
@@ -179,17 +198,49 @@ export async function POST(request: Request) {
     if (requestData.conversationId && session) {
       const { getConversation } = await import('@/lib/server/ai-conversations');
       const owner = await ensureSessionUser(session);
-      const conversation = await getConversation(owner.id, requestData.conversationId);
+      const conversation = await getConversation(
+        owner.id,
+        requestData.conversationId,
+      );
       conversationVersion = conversation.version;
-      if (requestData.conversationVersion !== undefined && requestData.conversationVersion !== conversation.version)
-        return respond({ code: 'CONVERSATION_VERSION_CONFLICT', error: requestData.locale === 'en' ? 'This conversation changed on another device. Reload it before asking a new question.' : 'Cuộc trò chuyện đã thay đổi trên thiết bị khác. Hãy tải lại trước khi hỏi tiếp.', conversationVersion }, 409);
+      if (
+        requestData.conversationVersion !== undefined &&
+        requestData.conversationVersion !== conversation.version
+      )
+        return respond(
+          {
+            code: 'CONVERSATION_VERSION_CONFLICT',
+            error:
+              requestData.locale === 'en'
+                ? 'This conversation changed on another device. Reload it before asking a new question.'
+                : 'Cuộc trò chuyện đã thay đổi trên thiết bị khác. Hãy tải lại trước khi hỏi tiếp.',
+            conversationVersion,
+          },
+          409,
+        );
     }
-    if (requestData.goal === 'hold' && session) {
-      const portfolio = await abortable(readPortfolioLedgerForSession(session), signal);
+    if (usingAccountLedger && session) {
+      const portfolio = await abortable(
+        readPortfolioLedgerForSession(session),
+        signal,
+      );
       ledgerVersion = portfolio.version;
       ledgerEmpty = portfolio.ledger.transactions.length === 0;
-      if (requestData.ledgerVersion !== undefined && requestData.ledgerVersion !== ledgerVersion)
-        return respond({ code: 'LEDGER_VERSION_CONFLICT', error: requestData.locale === 'en' ? 'Your ledger changed. Refresh it before analyzing.' : 'Sổ vàng đã thay đổi. Hãy tải lại trước khi phân tích.', ledgerVersion }, 409);
+      if (
+        requestData.ledgerVersion !== undefined &&
+        requestData.ledgerVersion !== ledgerVersion
+      )
+        return respond(
+          {
+            code: 'LEDGER_VERSION_CONFLICT',
+            error:
+              requestData.locale === 'en'
+                ? 'Your ledger changed. Refresh it before analyzing.'
+                : 'Sổ vàng đã thay đổi. Hãy tải lại trước khi phân tích.',
+            ledgerVersion,
+          },
+          409,
+        );
       prepared = prepareAnalysisInput({
         ...requestData,
         portfolioLedger: portfolio.ledger,
@@ -213,7 +264,10 @@ export async function POST(request: Request) {
           : 'Chưa thể kiểm tra quyền AI lúc này. Bấm Kiểm tra lại; chưa có lượt AI nào được sử dụng.',
       );
     }
-    const needs = [...(questionContext?.missing ?? []), ...prepared.needs].slice(0, 2);
+    const needs = [
+      ...(questionContext?.missing ?? []),
+      ...prepared.needs,
+    ].slice(0, 2);
     const ready = access.canAnalyze && needs.length === 0;
     console.info('AI prepare', {
       requestId,
@@ -230,13 +284,15 @@ export async function POST(request: Request) {
       ledgerVersion,
       conversationVersion,
       questionContext,
-      ...(ledgerEmpty ? {
-        ready: false,
-        status: 'empty',
-        code: 'LEDGER_EMPTY',
-        needs: [],
-        capability: 'portfolio',
-      } : {}),
+      ...(ledgerEmpty
+        ? {
+            ready: false,
+            status: 'empty',
+            code: 'LEDGER_EMPTY',
+            needs: [],
+            capability: 'portfolio',
+          }
+        : {}),
       status: !access.canAnalyze
         ? 'unavailable'
         : needs.length
@@ -253,10 +309,23 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError)
-      return respond({ code: 'INVALID_INPUT', error: locale === 'en' ? 'The request is too large.' : 'Payload quá lớn.' }, 413);
+      return respond(
+        {
+          code: 'INVALID_INPUT',
+          error:
+            locale === 'en' ? 'The request is too large.' : 'Payload quá lớn.',
+        },
+        413,
+      );
     if (error instanceof SyntaxError)
       return respond(
-        { code: 'INVALID_INPUT', error: locale === 'en' ? 'The request is invalid.' : 'Nội dung yêu cầu không hợp lệ.' },
+        {
+          code: 'INVALID_INPUT',
+          error:
+            locale === 'en'
+              ? 'The request is invalid.'
+              : 'Nội dung yêu cầu không hợp lệ.',
+        },
         400,
       );
     if (error instanceof AnalysisAccessError)
@@ -264,17 +333,32 @@ export async function POST(request: Request) {
         { code: error.code, error: error.message, requestId },
         error.status,
       );
-    if (error && typeof error === 'object' && 'code' in error && String((error as { code?: unknown }).code).startsWith('CONVERSATION_'))
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      String((error as { code?: unknown }).code).startsWith('CONVERSATION_')
+    )
       return respond(
-        { code: String((error as { code?: unknown }).code), error: error instanceof Error ? error.message : 'Conversation unavailable.' },
-        'status' in error && typeof (error as { status?: unknown }).status === 'number' ? Number((error as { status: number }).status) : 503,
+        {
+          code: String((error as { code?: unknown }).code),
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Conversation unavailable.',
+        },
+        'status' in error &&
+          typeof (error as { status?: unknown }).status === 'number'
+          ? Number((error as { status: number }).status)
+          : 503,
       );
     return respond(
       {
         code: 'SESSION_UNAVAILABLE',
-        error: locale === 'en'
-          ? 'Unable to check your session or AI access. Please try again; no AI request has been used.'
-          : 'Không kiểm tra được phiên đăng nhập hoặc quyền AI. Hãy thử lại; chưa có lượt AI nào được sử dụng.',
+        error:
+          locale === 'en'
+            ? 'Unable to check your session or AI access. Please try again; no AI request has been used.'
+            : 'Không kiểm tra được phiên đăng nhập hoặc quyền AI. Hãy thử lại; chưa có lượt AI nào được sử dụng.',
         requestId,
       },
       503,

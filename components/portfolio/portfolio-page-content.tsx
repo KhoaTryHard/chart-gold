@@ -1203,11 +1203,7 @@ export function PortfolioPageContent() {
                   ? 'Add a transaction'
                   : 'Thêm giao dịch'}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {english
-                ? 'Prices are stored as VND per lượng. Quantity defaults to chỉ for easier daily entry.'
-                : 'Giá được lưu theo VNĐ/lượng. Khối lượng mặc định là chỉ để nhập nhanh hằng ngày.'}
-            </p>
+           
           </div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1487,8 +1483,8 @@ export function PortfolioPageContent() {
             <p className="mt-1 text-sm text-muted-foreground">
               {visibleTransactions.length}/{summary.transactionCount}{' '}
               {english
-                ? 'shown · profit and loss follows earlier purchases'
-                : 'giao dịch đang hiện · lãi/lỗ tính theo các lần mua trước đó'}
+                ? 'shown'
+                : 'giao dịch đang hiện'}
             </p>
           </div>
         </div>

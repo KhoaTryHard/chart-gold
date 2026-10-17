@@ -40,18 +40,7 @@ export function WorldGoldSection() {
         </div>
       </div>
       <WorldGoldChart />
-      <div className="world-gold-section__guide">
-        <p>
-          {english
-            ? 'Each candle shows the opening, high, low, and closing price in the selected period. Hover or tap a candle for detail.'
-            : 'Mỗi nến thể hiện giá mở cửa, cao nhất, thấp nhất và đóng cửa trong khung thời gian được chọn. Rê chuột hoặc chạm vào nến để xem chi tiết.'}
-        </p>
-        <p>
-          {english
-            ? 'This is the OANDA XAU/USD price, not a Vietnam physical-gold dealer quote. The chart shows update time and market status; data can vary across providers.'
-            : 'Đây là giá XAU/USD theo nguồn OANDA, không phải giá mua bán vàng vật chất tại Việt Nam. Thời điểm cập nhật và trạng thái thị trường được hiển thị trong biểu đồ; dữ liệu có thể khác giữa các nhà cung cấp.'}
-        </p>
-      </div>
+    
     </section>
   );
 }

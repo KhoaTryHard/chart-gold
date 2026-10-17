@@ -11,6 +11,7 @@ import {
 } from '@/lib/market-sources';
 import type { AnalysisRange } from './metrics';
 import { resolveIntent } from './intent';
+import { answerFocus } from './focus';
 import { investmentInputs } from './investor-profile';
 import type { AnalysisGoal, ScenarioInputs } from './experience';
 
@@ -96,6 +97,7 @@ export function inferQuestionContext(input: {
 }): QuestionContext {
   const locale = input.locale ?? 'vi';
   const intent = resolveIntent(input.question, []);
+  const buying = answerFocus(input.question, intent, input.goal) === 'buy';
   const productCompanies = [
     ...new Set(
       intent.productIds
@@ -176,8 +178,10 @@ export function inferQuestionContext(input: {
       : {}),
   };
   const missing: QuestionContextNeed[] = [];
-  const productMentioned = Boolean(explicitProduct || shapeProduct);
-  if (input.goal === 'buy' && !productMentioned) {
+  const productMentioned = Boolean(
+    explicitProduct || shapeProduct || intent.companyIds.length,
+  );
+  if (buying && !productMentioned) {
     missing.push({
       key: 'product',
       label: locale === 'en' ? 'Product' : 'Loại vàng',
@@ -187,11 +191,7 @@ export function inferQuestionContext(input: {
           : 'Hãy nêu loại vàng hoặc thương hiệu bạn muốn phân tích.',
     });
   }
-  if (
-    input.goal === 'buy' &&
-    !scenarioInputs.quantityLuong &&
-    !scenarioInputs.capitalVnd
-  ) {
+  if (buying && !scenarioInputs.quantityLuong && !scenarioInputs.capitalVnd) {
     missing.push({
       key: 'quantityLuong',
       label: locale === 'en' ? 'Purchase size' : 'Quy mô mua',
@@ -202,7 +202,7 @@ export function inferQuestionContext(input: {
     });
   }
   if (
-    input.goal === 'buy' &&
+    buying &&
     /nen mua|mua ngay|should i buy|buy now|dau tu/.test(
       input.question
         .normalize('NFD')

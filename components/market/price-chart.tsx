@@ -67,7 +67,7 @@ export function PriceChart({
   const english = locale === 'en';
   const t = (vi: string, en: string) => (english ? en : vi);
   const { resolvedTheme } = useTheme();
-  const [mode, setMode] = useState<'candles' | 'line'>('candles');
+  const [mode, setMode] = useState<'candles' | 'line'>('line');
   const [side, setSide] = useState<'sell' | 'buy'>('sell');
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -426,41 +426,11 @@ export function PriceChart({
             <span aria-hidden="true" />
             {t('Thị trường trong nước', 'Domestic market')}
           </p>
-          <h2 className="mt-3 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h2 className="mt-1 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
             {heading}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {t(
-              'Theo dõi diễn biến giá mua vào và bán ra theo ngày.',
-              'Follow daily dealer buy and sell prices.',
-            )}
-          </p>
-        </div>
-        <div className={styles.source}>
-          <span>
-            {source?.provider ?? t('Lịch sử hiện có', 'Available history')} ·{' '}
-            {unit}
-          </span>
-          {source?.url && (
-            <a href={source.url} target="_blank" rel="noreferrer">
-              <ExternalLink size={14} aria-hidden="true" />
-              {t('Xem nguồn dữ liệu', 'View source')}
-            </a>
-          )}
         </div>
       </header>
-      {hasCandles && response?.source?.referenceGroup && (
-        <p className={styles.reference}>
-          {t('Chuỗi tham chiếu nhóm ', 'Reference series for the SJC ')}
-          {response.source.referenceGroup === 'bar'
-            ? t('vàng miếng SJC', 'gold bar group')
-            : t('nhẫn SJC', 'ring group')}
-          {t(
-            '; giá niêm yết từng kích cỡ có thể khác nhau.',
-            '; individual sizes may have different quoted prices.',
-          )}
-        </p>
-      )}
       <div className={styles.frame}>
         <div className={styles.toolbar}>
           <div
@@ -469,20 +439,20 @@ export function PriceChart({
           >
             <button
               type="button"
+              aria-pressed={effectiveMode === 'line'}
+              onClick={() => setMode('line')}
+            >
+              <ChartNoAxesCombined size={16} aria-hidden="true" />
+              {t('Đường', 'Line')}
+            </button>
+            <button
+              type="button"
               disabled={!hasCandles}
               aria-pressed={effectiveMode === 'candles'}
               onClick={() => setMode('candles')}
             >
               <CandlestickChart size={16} aria-hidden="true" />
               {t('Nến', 'Candles')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={effectiveMode === 'line'}
-              onClick={() => setMode('line')}
-            >
-              <ChartNoAxesCombined size={16} aria-hidden="true" />
-              {t('Đường', 'Line')}
             </button>
           </div>
           {effectiveMode === 'candles' && (
@@ -518,29 +488,6 @@ export function PriceChart({
                   : t('1 tháng', '1 month')}
               </button>
             ))}
-          </div>
-          <div className={`${styles.group} ${styles.zoom}`}>
-            <button
-              type="button"
-              aria-label={t('Thu nhỏ', 'Zoom out')}
-              onClick={() => zoom(1.4)}
-            >
-              <Minus size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('Phóng to', 'Zoom in')}
-              onClick={() => zoom(0.7)}
-            >
-              <Plus size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('Đặt lại biểu đồ', 'Reset chart')}
-              onClick={() => chart.current?.timeScale().fitContent()}
-            >
-              <RotateCcw size={16} />
-            </button>
           </div>
         </div>
         <div className={styles.readout} data-testid="chart-readout">
@@ -614,6 +561,29 @@ export function PriceChart({
           )}
         </div>
         <div className={styles.footer}>
+          <div className={styles.group}>
+            <button
+              type="button"
+              aria-label={t('Thu nhỏ', 'Zoom out')}
+              onClick={() => zoom(1.4)}
+            >
+              <Minus size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label={t('Phóng to', 'Zoom in')}
+              onClick={() => zoom(0.7)}
+            >
+              <Plus size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label={t('Đặt lại biểu đồ', 'Reset chart')}
+              onClick={() => chart.current?.timeScale().fitContent()}
+            >
+              <RotateCcw size={16} />
+            </button>
+          </div>
           <span>
             {displayed.length
               ? `${dateLabel(displayed[0].date)} – ${dateLabel(displayed.at(-1)!.date)} · `
@@ -628,29 +598,32 @@ export function PriceChart({
           </span>
         </div>
       </div>
+      <div className={styles.source}>
+        <span>
+          {source?.provider ?? t('Lịch sử hiện có', 'Available history')} ·{' '}
+          {unit}
+        </span>
+        {source?.url && (
+          <a href={source.url} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} aria-hidden="true" />
+            {t('Xem nguồn dữ liệu', 'View source')}
+          </a>
+        )}
+      </div>
+      
       <div className={styles.guide}>
-        <p>
-          {t(
-            'Rê chuột hoặc chạm để xem giá. Dùng ← →, Home / End trên biểu đồ. Kéo ngang để di chuyển; chụm ngón tay hoặc dùng + / − để thu phóng.',
-            'Hover or tap to inspect prices. Use ← →, Home / End on the chart. Drag to pan; pinch or use + / − to zoom.',
-          )}
-        </p>
-        <p>
-          {t(
-            'Giá mở và đóng là mức ghi nhận đầu và cuối ngày của nguồn. Nến hôm nay vẫn đang cập nhật.',
-            'Open and close are the first and last quotes recorded by the source each day. Today’s candle is still updating.',
-          )}
-        </p>
       </div>
       <output className={styles.status}>
         {loading ? (
-          t('Đang tải dữ liệu nến…', 'Loading candlestick data…')
+          mode === 'candles' || !displayed.length ? (
+            t('Đang tải lịch sử giá…', 'Loading price history…')
+          ) : null
         ) : response?.status === 'partial' ? (
           t(
             `Lịch sử chưa đầy đủ: ${response.records.length}/${range === '7N' ? 7 : 30} ngày. Ngày thiếu dữ liệu được để trống.`,
             `Incomplete history: ${response.records.length}/${range === '7N' ? 7 : 30} days. Missing days are left blank.`,
           )
-        ) : !hasCandles ? (
+        ) : !hasCandles && mode === 'candles' ? (
           <>
             {t(
               'Chưa có dữ liệu nến cho lựa chọn này. Đang hiển thị giá mua/bán theo ngày hiện có.',

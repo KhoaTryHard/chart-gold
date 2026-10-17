@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { AnalysisIntent } from './intent';
 import type { Locale } from '@/lib/i18n';
 
-export const ANALYSIS_PROMPT_VERSION = '2026-09-v3';
+export const ANALYSIS_PROMPT_VERSION = '2026-10-v4-focus';
 
 /** Feature flag for the new analysis workspace. It is deliberately opt-in. */
 export function analysisExperienceV2Enabled() {
@@ -72,8 +72,14 @@ export function missingAnalysisInputs({
   ) {
     missing.push({
       key: 'quantityLuong',
-      label: locale === 'en' ? 'Planned quantity or budget' : 'Số lượng hoặc số tiền dự kiến',
-      reason: locale === 'en' ? 'Purchase size is needed to calculate spread and break-even.' : 'Cần biết quy mô mua để tính spread và hòa vốn.',
+      label:
+        locale === 'en'
+          ? 'Planned quantity or budget'
+          : 'Số lượng hoặc số tiền dự kiến',
+      reason:
+        locale === 'en'
+          ? 'Purchase size is needed to calculate spread and break-even.'
+          : 'Cần biết quy mô mua để tính spread và hòa vốn.',
     });
   }
   const hasSavedPositions = Boolean(
@@ -86,8 +92,12 @@ export function missingAnalysisInputs({
   ) {
     missing.push({
       key: 'quantityLuong',
-      label: locale === 'en' ? 'Quantity held (lượng)' : 'Số lượng đang giữ (lượng)',
-      reason: locale === 'en' ? 'Your quantity is needed to calculate profit or loss.' : 'Cần số lượng để tính lãi/lỗ của bạn.',
+      label:
+        locale === 'en' ? 'Quantity held (lượng)' : 'Số lượng đang giữ (lượng)',
+      reason:
+        locale === 'en'
+          ? 'Your quantity is needed to calculate profit or loss.'
+          : 'Cần số lượng để tính lãi/lỗ của bạn.',
     });
   }
   if (
@@ -98,7 +108,10 @@ export function missingAnalysisInputs({
     missing.push({
       key: 'costPerLuongVnd',
       label: locale === 'en' ? 'Cost basis per lượng' : 'Giá vốn mỗi lượng',
-      reason: locale === 'en' ? 'Your cost basis is needed to calculate profit or loss on holdings.' : 'Cần giá vốn để tính lãi/lỗ đang giữ.',
+      reason:
+        locale === 'en'
+          ? 'Your cost basis is needed to calculate profit or loss on holdings.'
+          : 'Cần giá vốn để tính lãi/lỗ đang giữ.',
     });
   }
   if (
@@ -114,8 +127,12 @@ export function missingAnalysisInputs({
   ) {
     missing.push({
       key: 'horizon',
-      label: locale === 'en' ? 'Planned holding period' : 'Thời gian dự định giữ',
-      reason: locale === 'en' ? 'Holding period changes how spread and volatility should be considered.' : 'Thời gian giữ thay đổi cách cân nhắc spread và biến động.',
+      label:
+        locale === 'en' ? 'Planned holding period' : 'Thời gian dự định giữ',
+      reason:
+        locale === 'en'
+          ? 'Holding period changes how spread and volatility should be considered.'
+          : 'Thời gian giữ thay đổi cách cân nhắc spread và biến động.',
     });
   }
   if (missing.length > 2) return missing.slice(0, 2);
